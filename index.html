@@ -20,14 +20,14 @@
         <p>This tool works best in Chrome, and has also been successfully tested in Firefox.</p>
       </li>
       <li>
-        <p>To start a new video annotation, select a video file. <input type="file" id="video_file" accept="video/*" /></p>
-        <p>To resume a previous annotation, select a frames zip archive. <input type="file" id="zip_file" accept=".zip" /></p>
+        <p>To start a new video annotation, select a video file: <input type="file" id="video_file" accept="video/*" /></p>
+        <p>To resume a previous annotation, select a frames zip archive: <input type="file" id="zip_file" accept=".zip" /></p>
         <p>Note: Keep the focus on the browser during the entire extraction process, or frames might be skipped.</p>
         <p class="output" id="video_dimensions"></p>
         <p class="output" id="extraction_progress"></p>
       </li>
       <li>
-        <p>Download the extracted frames zip archive.</p>
+        <p>Download the extracted frames zip archive: <button id="getframes">Get frames zip archive</button></p>
       </li>
       <li>
         <p>Optional: Load an existing <a href="http://web.mit.edu/vondrick/vatic/" target="new">VATIC</a>-compatible XML annotation file.</p>
@@ -50,6 +50,8 @@
     </ol>
 
     <script type="text/javascript" src="dist/compatibility.js"></script>
+    <script type="text/javascript" src="dist/jszip.js"></script>
+    <script type="text/javascript" src="dist/FileSaver.js"></script>
     <script type="text/javascript">
       // Should be higher than real FPS to not skip real frames
       // Hardcoded due to JS limitations
@@ -63,12 +65,14 @@
       var ctx = canvas.getContext('2d');
       var video_dimensions = document.querySelector('#video_dimensions');
       var extraction_progress = document.querySelector('#extraction_progress');
+      var getframes_button = document.querySelector('#getframes');
 
       var frames = [];
       var lastFrame = -1;
 
       document.querySelector('input').addEventListener('change', extractFrames, false);
       document.querySelector('#play').addEventListener('click', replay, false);
+      getframes_button.addEventListener('click', getFrames, false);
 
       function extractFrames() {
         if (this.files.length == 0) {
@@ -117,10 +121,7 @@
         }
 
         function saveFrame(blob) {
-          img = new Image();
-          img.onload = revokeURL;
-          img.src = URL.createObjectURL(blob);
-          frames.push(img);
+          frames.push(blob);
 
           if (video.ended && frames.length == inflight) {
             ended();
@@ -133,10 +134,6 @@
             URL.revokeObjectURL(video.src);
             video.src = '';
           }
-        }
-
-        function revokeURL(e) {
-          URL.revokeObjectURL(this.src);
         }
 
         video.autoplay = false;
@@ -158,9 +155,26 @@
           return;
         }
 
-        ctx.drawImage(frames[lastFrame], 0, 0);
-        lastFrame++;
-        setTimeout(nextFrame, 1000 / fps);
+        var img = new Image();
+        img.onload = function(e) {
+          ctx.drawImage(img, 0, 0);
+          lastFrame++;
+          setTimeout(nextFrame, 1000 / fps);
+
+          URL.revokeObjectURL(this.src);
+        };
+        img.src = URL.createObjectURL(frames[lastFrame]);
+      }
+
+      function getFrames() {
+        var zip = new JSZip();
+        for (var i = 0; i < frames.length; i++) {
+          zip.file(i + '.jpg', frames[i]);
+        }
+        zip.generateAsync({type:"blob"})
+           .then(function (blob) { saveAs(blob, "extracted-frames.zip"); });
+
+
       }
     </script>
   </body>
