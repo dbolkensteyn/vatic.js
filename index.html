@@ -22,7 +22,7 @@
       <li>
         <p>To start a new video annotation, select a video file. <input type="file" id="video_file" accept="video/*" /></p>
         <p>To resume a previous annotation, select a frames zip archive. <input type="file" id="zip_file" accept=".zip" /></p>
-        <p>NOTE: Keep the focus on the browser during the entire extraction process, or frames might be skipped.</p>
+        <p>Note: Keep the focus on the browser during the entire extraction process, or frames might be skipped.</p>
         <p class="output" id="video_dimensions"></p>
         <p class="output" id="extraction_progress"></p>
       </li>
@@ -36,9 +36,10 @@
           <li>You are resuming a previous annotation.</li>
           <li>You already have a first version of your automatic object detector, which you want to improve by manually correcting its errors.</li>
         </ul>
+        <p>Note: Launch your object detector on the extracted frames rather than on the original video to avoid frame mismatches!</p>
       </li>
       <li>
-        <p>Manually annotate the frames.</p>
+        <p>Manually annotate the frame sequence:</p>
         <canvas id="canvas"></canvas>
         <br />
         <button id="play">Play</button>
