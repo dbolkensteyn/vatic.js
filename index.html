@@ -70,11 +70,12 @@
       var frames = [];
       var lastFrame = -1;
 
-      document.querySelector('input').addEventListener('change', extractFrames, false);
+      document.querySelector('#video_file').addEventListener('change', extractFramesFromVideo, false);
+      document.querySelector('#zip_file').addEventListener('change', extractFramesFromArchive, false);
       document.querySelector('#play').addEventListener('click', replay, false);
       getframes_button.addEventListener('click', getFrames, false);
 
-      function extractFrames() {
+      function extractFramesFromVideo() {
         if (this.files.length == 0) {
           return;
         }
@@ -143,6 +144,44 @@
         video.src = URL.createObjectURL(this.files[0]);
         video.playbackRate = playbackRate;
         video.play();
+      }
+
+      function extractFramesFromArchive() {
+        if (this.files.length == 0) {
+          return;
+        }
+
+        frames = [];
+        lastFrame = -1;
+
+        JSZip.loadAsync(this.files[0])
+             .then(function(zip) {
+               var total = 0;
+               for (var i = 0; ; i++) {
+                 var frame = zip.file(i + '.jpg');
+                 if (frame == null) {
+                   total = i;
+                   break;
+                 }
+               }
+
+               var processed = 0;
+               for (var i = 0; i < total; i++) {
+                 var _ = function (frameNumber) {
+                   var frame = zip.file(frameNumber + '.jpg');
+                   frame.async('arraybuffer')
+                        .then(function(content) {
+                          processed++;
+                          frames[frameNumber] = new Blob([ content ]);
+                          extraction_progress.innerHTML =  ((processed / total) * 100).toFixed(2) + ' % completed. ' + (processed + 1) + ' frames extracted. ';
+
+                          if (processed == total) {
+                            extraction_progress.innerHTML = 'Extraction completed. ' + frames.length + ' frames captured.';
+                          }
+                        });
+                 }(i);
+               }
+             });
       }
 
       function replay() {
