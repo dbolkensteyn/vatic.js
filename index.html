@@ -1,14 +1,52 @@
 <!doctype html>
 
 <html lang="en">
+  <head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <title>VATIC-LIGHT: A pure Javascript video annotating tool</title>
+    <style>
+      .output { font-family: monospace; }
+    </style>
+  </head>
   <body>
-    <input type="file" accept="video/*" />
-    <p id="progress1"></p>
-    <p id="progress2"></p>
     <video id="video" style="display: none;"></video>
-    <canvas id="canvas"></canvas>
-    <button id="play">Replay</button>
-    <div id="result"></div>
+
+    <h1>VATIC-LIGHT: A pure Javascript video annotating tool</h1>
+
+    <ol>
+      <li>
+        <p>This tool can be used to easily annotate a video, without having to install anything special.</p>
+        <p>Optical flow is used to track your annotations, so that have to do as little work as possible ;-)</p>
+        <p>This tool works best on Chrome, and has also been successfully tested on Firefox.</p>
+      </li>
+      <li>
+        <p>To start a new video annotation, select a video file. <input type="file" id="video_file" accept="video/*" /></p>
+        <p>To resume a previous annotation, select a frames zip archive. <input type="file" id="zip_file" accept=".zip" /></p>
+        <p>NOTE: Keep the focus on the browser during the entire extraction process, or frames will be skipped.</p>
+        <p class="output" id="video_dimensions"></p>
+        <p class="output" id="extraction_progress"></p>
+      </li>
+      <li>
+        <p>Download the extracted frames zip archive.</p>
+      </li>
+      <li>
+        <p>Optional: Load an existing <a href="http://web.mit.edu/vondrick/vatic/" target="new">VATIC</a>-compatible XML annotation file.</p>
+        <p>This is useful for example if:</p>
+        <ul>
+          <li>You are resuming a previous annotation.</li>
+          <li>You already have a first version of your automatic object detector, which you want to improve by manually correcting its errors.</li>
+        </ul>
+      </li>
+      <li>
+        <p>Manually annotate the frames.</p>
+        <canvas id="canvas"></canvas>
+        <br />
+        <button id="play">Play</button>
+      </li>
+      <li>
+        <p>Download the <a href="http://web.mit.edu/vondrick/vatic/" target="new">VATIC</a>-compatible XML annotations file.</p>
+      </li>
+    </ol>
 
     <script type="text/javascript" src="compatibility.js"></script>
     <script type="text/javascript">
@@ -22,9 +60,8 @@
       var video = document.querySelector('#video');
       var canvas = document.querySelector('#canvas');
       var ctx = canvas.getContext('2d');
-      var progress1 = document.querySelector('#progress1');
-      var progress2 = document.querySelector('#progress2');
-      var result = document.querySelector('#result');
+      var video_dimensions = document.querySelector('#video_dimensions');
+      var extraction_progress = document.querySelector('#extraction_progress');
 
       var frames = [];
       var lastFrame = -1;
@@ -39,7 +76,6 @@
 
         frames = [];
         lastFrame = -1;
-        result.innerHTML = '';
         var inflight = 0;
 
         function initCanvas(e) {
@@ -47,7 +83,7 @@
 
           canvas.width = this.videoWidth;
           canvas.height = this.videoHeight;
-          progress1.innerHTML = canvas.width + 'x' + canvas.height;
+          video_dimensions.innerHTML = 'Video dimensions determined: ' + canvas.width + 'x' + canvas.height;
 
           compatibility.requestAnimationFrame(drawFrame);
         }
@@ -68,14 +104,12 @@
             return;
           }
 
-          progress1.innerHTML = ((video.currentTime / video.duration) * 100).toFixed(2) + ' %';
+          extraction_progress.innerHTML = ((video.currentTime / video.duration) * 100).toFixed(2) + ' % completed. ' + frames.length + ' frames extracted. ';
 
           var currentFrame = Math.round(video.currentTime * fps);
           if (currentFrame != lastFrame) {
             lastFrame = currentFrame;
             inflight++;
-            progress2.innerHTML = currentFrame + ' inflight = ' + inflight;
-
             ctx.drawImage(video, 0, 0);
             canvas.toBlob(saveFrame, 'image/jpeg');
           }
@@ -87,17 +121,17 @@
           img.src = URL.createObjectURL(blob);
           frames.push(img);
 
-          // canvas.toBlob() is asyncronous and might take a while to complete
           if (video.ended && frames.length == inflight) {
             ended();
           }
         }
 
         function ended() {
-          console.log('video: ' + video.ended + ', ' + frames.length + ' vs ' + inflight);
-          progress1.innerHTML = 'Completed with ' + frames.length + ' frames captured. inflight = ' + inflight;
-          progress2.innerHTML = '';
-          URL.revokeObjectURL(video.src);
+          if (video.src != '') {
+            extraction_progress.innerHTML = 'Extraction completed. ' + frames.length + ' frames captured.';
+            URL.revokeObjectURL(video.src);
+            video.src = '';
+          }
         }
 
         function revokeURL(e) {
@@ -123,7 +157,6 @@
           return;
         }
 
-        console.log(lastFrame + ': ' + frames[lastFrame] + ' - length: ' + frames.length);
         ctx.drawImage(frames[lastFrame], 0, 0);
         lastFrame++;
         setTimeout(nextFrame, 1000 / fps);
