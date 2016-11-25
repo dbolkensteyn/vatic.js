@@ -239,15 +239,27 @@
       }
 
       var lastFrame = 0;
+      var nextFrameTimeout = null;
+
       function controlClicked() {
         if (this.value == 'Play') {
+          this.value = 'Pause';
+          nextFrame();
+        } else if (this.value == 'Replay') {
+          this.value = 'Pause';
           lastFrame = 0;
           nextFrame();
+        } else if (this.value == 'Pause') {
+          this.value = 'Play';
+          if (nextFrameTimeout != null) {
+            clearTimeout(nextFrameTimeout);
+          }
         }
       }
 
       function nextFrame() {
         if (lastFrame >= frames.length) {
+          controlButton.value = 'Replay';
           return;
         }
 
@@ -255,7 +267,7 @@
         img.onload = function(e) {
           ctx.drawImage(img, 0, 0);
           lastFrame++;
-          setTimeout(nextFrame, 1000 / fps);
+          nextFrameTimeout = setTimeout(nextFrame, 1000 / fps);
 
           URL.revokeObjectURL(this.src);
         };
