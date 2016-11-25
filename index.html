@@ -41,7 +41,7 @@
       <li>
         <p>Manually annotate the frame sequence:</p>
         <canvas id="canvas"></canvas>
-        <p><button id="control">Play</button></p>
+        <p><input type="button" id="control" /></p>
         <p>Tip: Zoom in with your browser to place the bounding boxes more accurately.</p>
       </li>
       <li>
@@ -63,13 +63,15 @@
       var video = document.querySelector('#video');
       var canvas = document.querySelector('#canvas');
       var ctx = canvas.getContext('2d');
+      var videoFile = document.querySelector('#videoFile');
+      var zipFile = document.querySelector('#zipFile');
       var videoDimensionsElement = document.querySelector('#videoDimensions');
       var extractionProgressElement = document.querySelector('#extractionProgress');
       var downloadFramesButton = document.querySelector('#downloadFrames');
       var controlButton = document.querySelector('#control');
 
-      document.querySelector('#videoFile').addEventListener('change', extractFramesFromVideo, false);
-      document.querySelector('#zipFile').addEventListener('change', extractFramesFromArchive, false);
+      videoFile.addEventListener('change', extractFramesFromVideo, false);
+      zipFile.addEventListener('change', extractFramesFromArchive, false);
 
       controlButton.addEventListener('click', controlClicked, false);
       downloadFramesButton.addEventListener('click', downloadFrames, false);
@@ -77,10 +79,16 @@
       var frames;
 
       // Initialize state
-      extractionStarting();
+      extractionStarting(true);
 
-      function extractionStarting() {
+      function extractionStarting(isInitialization = false) {
+        if (!isInitialization) {
+          videoFile.disabled = true;
+          zipFile.disabled = true;
+        }
+
         frames = [];
+        controlButton.value = 'Play';
         controlButton.disabled = true;
         downloadFramesButton.disabled = true;
       }
@@ -97,6 +105,8 @@
 
       function extractionCompleted() {
         extractionProgressElement.innerHTML = 'Extraction completed. ' + frames.length + ' frames captured.';
+        videoFile.disabled = false;
+        zipFile.disabled = false;
         controlButton.disabled = false;
         downloadFramesButton.disabled = false;
       }
@@ -230,8 +240,10 @@
 
       var lastFrame = 0;
       function controlClicked() {
-        lastFrame = 0;
-        nextFrame();
+        if (this.value == 'Play') {
+          lastFrame = 0;
+          nextFrame();
+        }
       }
 
       function nextFrame() {
