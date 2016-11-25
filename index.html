@@ -68,16 +68,21 @@
       var downloadFramesButton = document.querySelector('#downloadFrames');
       var controlButton = document.querySelector('#control');
 
-      var frames = [];
-      var lastFrame = -1;
-
       document.querySelector('#videoFile').addEventListener('change', extractFramesFromVideo, false);
       document.querySelector('#zipFile').addEventListener('change', extractFramesFromArchive, false);
+
       controlButton.addEventListener('click', controlClicked, false);
       downloadFramesButton.addEventListener('click', downloadFrames, false);
 
+      var frames;
+
+      // Initialize state
+      extractionStarting();
+
       function extractionStarting() {
         frames = [];
+        controlButton.disabled = true;
+        downloadFramesButton.disabled = true;
       }
 
       function extractionFoundDimensions(width, height) {
@@ -92,6 +97,8 @@
 
       function extractionCompleted() {
         extractionProgressElement.innerHTML = 'Extraction completed. ' + frames.length + ' frames captured.';
+        controlButton.disabled = false;
+        downloadFramesButton.disabled = false;
       }
 
       function extractFramesFromVideo() {
