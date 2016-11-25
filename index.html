@@ -83,6 +83,8 @@
       // Initialize state
       extractionStarting(true);
 
+      // Frame extraction region
+
       function extractionStarting(isInitialization = false) {
         if (!isInitialization) {
           videoFile.disabled = true;
@@ -231,6 +233,8 @@
              });
       }
 
+      // Download frames region
+
       function downloadFrames() {
         var zip = new JSZip();
         for (var i = 0; i < frames.length; i++) {
@@ -239,6 +243,8 @@
         zip.generateAsync({type: "blob"})
            .then(function (blob) { saveAs(blob, "extracted-frames.zip"); });
       }
+
+      // Playback region
 
       var lastFrame = 0;
       var nextFrameTimeout = null;
