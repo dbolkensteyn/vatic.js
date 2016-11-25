@@ -20,14 +20,14 @@
         <p>This tool works best in Chrome, and has also been successfully tested in Firefox.</p>
       </li>
       <li>
-        <p>To start a new video annotation, select a video file: <input type="file" id="video_file" accept="video/*" /></p>
-        <p>To resume a previous annotation, select a frames zip archive: <input type="file" id="zip_file" accept=".zip" /></p>
+        <p>To start a new video annotation, select a video file: <input type="file" id="videoFile" accept="video/*" /></p>
+        <p>To resume a previous annotation, select a frames zip archive: <input type="file" id="zipFile" accept=".zip" /></p>
         <p>Note: Keep the focus on the browser during the entire extraction process, or frames might be skipped.</p>
-        <p class="output" id="video_dimensions"></p>
-        <p class="output" id="extraction_progress"></p>
+        <p class="output" id="videoDimensions"></p>
+        <p class="output" id="extractionProgress"></p>
       </li>
       <li>
-        <p>Download the extracted frames zip archive: <button id="getframes">Get frames zip archive</button></p>
+        <p>Download the extracted frames zip archive: <button id="downloadFrames">Get frames zip archive</button></p>
       </li>
       <li>
         <p>Optional: Load an existing <a href="http://web.mit.edu/vondrick/vatic/" target="new">VATIC</a>-compatible XML annotation file.</p>
@@ -41,7 +41,7 @@
       <li>
         <p>Manually annotate the frame sequence:</p>
         <canvas id="canvas"></canvas>
-        <p><button id="play">Play</button></p>
+        <p><button id="control">Play</button></p>
         <p>Tip: Zoom in with your browser to place the bounding boxes more accurately.</p>
       </li>
       <li>
@@ -63,17 +63,18 @@
       var video = document.querySelector('#video');
       var canvas = document.querySelector('#canvas');
       var ctx = canvas.getContext('2d');
-      var video_dimensions = document.querySelector('#video_dimensions');
-      var extraction_progress = document.querySelector('#extraction_progress');
-      var getframes_button = document.querySelector('#getframes');
+      var videoDimensionsElement = document.querySelector('#videoDimensions');
+      var extractionProgressElement = document.querySelector('#extractionProgress');
+      var downloadFramesButton = document.querySelector('#downloadFrames');
+      var controlButton = document.querySelector('#control');
 
       var frames = [];
       var lastFrame = -1;
 
-      document.querySelector('#video_file').addEventListener('change', extractFramesFromVideo, false);
-      document.querySelector('#zip_file').addEventListener('change', extractFramesFromArchive, false);
-      document.querySelector('#play').addEventListener('click', replay, false);
-      getframes_button.addEventListener('click', downloadFrames, false);
+      document.querySelector('#videoFile').addEventListener('change', extractFramesFromVideo, false);
+      document.querySelector('#zipFile').addEventListener('change', extractFramesFromArchive, false);
+      controlButton.addEventListener('click', controlClicked, false);
+      downloadFramesButton.addEventListener('click', downloadFrames, false);
 
       function extractionStarting() {
         frames = [];
@@ -82,15 +83,15 @@
       function extractionFoundDimensions(width, height) {
         canvas.width = width;
         canvas.height = height;
-        video_dimensions.innerHTML = 'Video dimensions determined: ' + canvas.width + 'x' + canvas.height;
+        videoDimensionsElement.innerHTML = 'Video dimensions determined: ' + canvas.width + 'x' + canvas.height;
       }
 
       function extractionProgressed(percentage, framesSoFar) {
-        extraction_progress.innerHTML = (percentage * 100).toFixed(2) + ' % completed. ' + framesSoFar + ' frames extracted.';
+        extractionProgressElement.innerHTML = (percentage * 100).toFixed(2) + ' % completed. ' + framesSoFar + ' frames extracted.';
       }
 
       function extractionCompleted() {
-        extraction_progress.innerHTML = 'Extraction completed. ' + frames.length + ' frames captured.';
+        extractionProgressElement.innerHTML = 'Extraction completed. ' + frames.length + ' frames captured.';
       }
 
       function extractFramesFromVideo() {
@@ -221,7 +222,7 @@
       }
 
       var lastFrame = 0;
-      function replay() {
+      function controlClicked() {
         lastFrame = 0;
         nextFrame();
       }
