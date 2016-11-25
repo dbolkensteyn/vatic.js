@@ -249,16 +249,28 @@
       var lastFrame = 0;
       var nextFrameTimeout = null;
 
+      document.body.onkeyup = function(e) {
+        if (e.keyCode == 32) {
+          e.preventDefault();
+          controlClicked();
+        }
+      }
+
       function controlClicked() {
-        if (this.value == 'Play') {
-          this.value = 'Pause';
+        if (controlButton.disabled) {
+          // Can happen when the spacebar is hit
+          return;
+        }
+
+        if (controlButton.value == 'Play') {
+          controlButton.value = 'Pause';
           nextFrame();
-        } else if (this.value == 'Replay') {
-          this.value = 'Pause';
+        } else if (controlButton.value == 'Replay') {
+          controlButton.value = 'Pause';
           lastFrame = 0;
           nextFrame();
-        } else if (this.value == 'Pause') {
-          this.value = 'Play';
+        } else if (controlButton.value == 'Pause') {
+          controlButton.value = 'Play';
           if (nextFrameTimeout != null) {
             clearTimeout(nextFrameTimeout);
           }
