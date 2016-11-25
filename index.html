@@ -234,7 +234,7 @@
         for (var i = 0; i < frames.length; i++) {
           zip.file(i + '.jpg', frames[i]);
         }
-        zip.generateAsync({type:"blob"})
+        zip.generateAsync({type: "blob"})
            .then(function (blob) { saveAs(blob, "extracted-frames.zip"); });
       }
 
