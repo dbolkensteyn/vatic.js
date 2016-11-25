@@ -92,7 +92,7 @@
         }
 
         frames = [];
-        controlButton.value = 'Play';
+        resetControlButton();
         controlButton.disabled = true;
         downloadFramesButton.disabled = true;
       }
@@ -292,6 +292,11 @@
           URL.revokeObjectURL(this.src);
         };
         img.src = URL.createObjectURL(frames[lastFrame]);
+      }
+
+      function resetControlButton() {
+        controlButton.value = 'Play';
+        lastFrame = 0;
       }
     </script>
   </body>
