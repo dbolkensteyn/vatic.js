@@ -75,13 +75,25 @@
       document.querySelector('#play').addEventListener('click', replay, false);
       getframes_button.addEventListener('click', getFrames, false);
 
+      function startExtraction() {
+        frames = [];
+        lastFrame = -1;
+      }
+
+      function extractionProgressed(percentage, framesSoFar) {
+        extraction_progress.innerHTML = (percentage * 100).toFixed(2) + ' % completed. ' + framesSoFar + ' frames extracted. ';
+      }
+
+      function extractionCompleted() {
+        extraction_progress.innerHTML = 'Extraction completed. ' + frames.length + ' frames captured.';
+      }
+
       function extractFramesFromVideo() {
         if (this.files.length == 0) {
           return;
         }
 
-        frames = [];
-        lastFrame = -1;
+        startExtraction();
         var inflight = 0;
 
         function initCanvas(e) {
@@ -110,7 +122,7 @@
             return;
           }
 
-          extraction_progress.innerHTML = ((video.currentTime / video.duration) * 100).toFixed(2) + ' % completed. ' + frames.length + ' frames extracted. ';
+          extractionProgressed(video.currentTime / video.duration, frames.length);
 
           var currentFrame = Math.round(video.currentTime * fps);
           if (currentFrame != lastFrame) {
@@ -131,9 +143,9 @@
 
         function ended() {
           if (video.src != '') {
-            extraction_progress.innerHTML = 'Extraction completed. ' + frames.length + ' frames captured.';
             URL.revokeObjectURL(video.src);
             video.src = '';
+            extractionCompleted();
           }
         }
 
@@ -151,8 +163,7 @@
           return;
         }
 
-        frames = [];
-        lastFrame = -1;
+        startExtraction();
 
         JSZip.loadAsync(this.files[0])
              .then(function(zip) {
@@ -173,10 +184,10 @@
                         .then(function(content) {
                           processed++;
                           frames[frameNumber] = new Blob([ content ]);
-                          extraction_progress.innerHTML =  ((processed / total) * 100).toFixed(2) + ' % completed. ' + (processed + 1) + ' frames extracted. ';
+                          extractionProgressed(processed / total, processed);
 
                           if (processed == total) {
-                            extraction_progress.innerHTML = 'Extraction completed. ' + frames.length + ' frames captured.';
+                            extractionCompleted();
                           }
                         });
                  }(i);
