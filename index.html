@@ -98,15 +98,15 @@
           return;
         }
 
-        var lastFrame = -1;
+        var lastApproxFrame = -1;
+        var frameCounter = 0;
         var processed = 0;
-        var inflight = 0;
 
         extractionStarting();
 
         function onBrowserAnimationFrame() {
           if (video.ended) {
-            if (processed == inflight) {
+            if (processed == frameCounter) {
               ended();
             }
             return;
@@ -122,10 +122,10 @@
 
           extractionProgressed(video.currentTime / video.duration, processed);
 
-          var currentFrame = Math.round(video.currentTime * fps);
-          if (currentFrame != lastFrame) {
-            lastFrame = currentFrame;
-            inflight++;
+          var currentApproxFrame = Math.round(video.currentTime * fps);
+          if (currentApproxFrame != lastApproxFrame) {
+            lastApproxFrame = currentApproxFrame;
+            frameCounter++;
 
             var _ = function(frameNumber) {
               ctx.drawImage(video, 0, 0);
@@ -133,12 +133,12 @@
                 function(blob) {
                   processed++;
                   frames[frameNumber] = blob;
-                  if (video.ended && processed == inflight) {
+                  if (video.ended && processed == frameCounter) {
                     ended();
                   }
                 },
                 'image/jpeg');
-            }(currentFrame);
+            }(frameCounter - 1);
           }
         }
 
