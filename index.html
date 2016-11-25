@@ -75,13 +75,19 @@
       document.querySelector('#play').addEventListener('click', replay, false);
       getframes_button.addEventListener('click', getFrames, false);
 
-      function startExtraction() {
+      function extractionStarting() {
         frames = [];
         lastFrame = -1;
       }
 
+      function extractionFoundDimensions(width, height) {
+        canvas.width = width;
+        canvas.height = height;
+        video_dimensions.innerHTML = 'Video dimensions determined: ' + canvas.width + 'x' + canvas.height;
+      }
+
       function extractionProgressed(percentage, framesSoFar) {
-        extraction_progress.innerHTML = (percentage * 100).toFixed(2) + ' % completed. ' + framesSoFar + ' frames extracted. ';
+        extraction_progress.innerHTML = (percentage * 100).toFixed(2) + ' % completed. ' + framesSoFar + ' frames extracted.';
       }
 
       function extractionCompleted() {
@@ -93,18 +99,8 @@
           return;
         }
 
-        startExtraction();
+        extractionStarting();
         var inflight = 0;
-
-        function initCanvas(e) {
-          video.removeEventListener('loadedmetadata', initCanvas);
-
-          canvas.width = this.videoWidth;
-          canvas.height = this.videoHeight;
-          video_dimensions.innerHTML = 'Video dimensions determined: ' + canvas.width + 'x' + canvas.height;
-
-          compatibility.requestAnimationFrame(drawFrame);
-        }
 
         function drawFrame() {
           if (video.ended) {
@@ -152,7 +148,14 @@
         video.autoplay = false;
         video.muted = true;
         video.loop = false;
-        video.addEventListener('loadedmetadata', initCanvas, false);
+        video.addEventListener(
+          'loadedmetadata',
+          function onMetadata(e) {
+            video.removeEventListener('loadedmetadata', onMetadata);
+            compatibility.requestAnimationFrame(drawFrame);
+            extractionFoundDimensions(video.videoWidth, video.videoHeight);
+          },
+          false);
         video.src = URL.createObjectURL(this.files[0]);
         video.playbackRate = playbackRate;
         video.play();
@@ -163,7 +166,7 @@
           return;
         }
 
-        startExtraction();
+        extractionStarting();
 
         JSZip.loadAsync(this.files[0])
              .then(function(zip) {
@@ -184,6 +187,14 @@
                         .then(function(content) {
                           processed++;
                           frames[frameNumber] = new Blob([ content ]);
+                          if (frameNumber == 0) {
+                            var img = new Image();
+                            img.onload = function(e) {
+                              extractionFoundDimensions(this.width, this.height);
+                              URL.revokeObjectURL(this.src);
+                            };
+                            img.src = URL.createObjectURL(frames[0]);
+                          }
                           extractionProgressed(processed / total, processed);
 
                           if (processed == total) {
