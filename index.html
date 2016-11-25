@@ -73,11 +73,10 @@
       document.querySelector('#video_file').addEventListener('change', extractFramesFromVideo, false);
       document.querySelector('#zip_file').addEventListener('change', extractFramesFromArchive, false);
       document.querySelector('#play').addEventListener('click', replay, false);
-      getframes_button.addEventListener('click', getFrames, false);
+      getframes_button.addEventListener('click', downloadFrames, false);
 
       function extractionStarting() {
         frames = [];
-        lastFrame = -1;
       }
 
       function extractionFoundDimensions(width, height) {
@@ -99,18 +98,21 @@
           return;
         }
 
-        extractionStarting();
+        var lastFrame = -1;
+        var processed = 0;
         var inflight = 0;
 
-        function drawFrame() {
+        extractionStarting();
+
+        function onBrowserAnimationFrame() {
           if (video.ended) {
-            if (frames.length == inflight) {
+            if (processed == inflight) {
               ended();
             }
             return;
           }
 
-          compatibility.requestAnimationFrame(drawFrame);
+          compatibility.requestAnimationFrame(onBrowserAnimationFrame);
 
           if (video.readyState !== video.HAVE_CURRENT_DATA &&
               video.readyState !== video.HAVE_FUTURE_DATA &&
@@ -118,22 +120,25 @@
             return;
           }
 
-          extractionProgressed(video.currentTime / video.duration, frames.length);
+          extractionProgressed(video.currentTime / video.duration, processed);
 
           var currentFrame = Math.round(video.currentTime * fps);
           if (currentFrame != lastFrame) {
             lastFrame = currentFrame;
             inflight++;
-            ctx.drawImage(video, 0, 0);
-            canvas.toBlob(saveFrame, 'image/jpeg');
-          }
-        }
 
-        function saveFrame(blob) {
-          frames.push(blob);
-
-          if (video.ended && frames.length == inflight) {
-            ended();
+            var _ = function(frameNumber) {
+              ctx.drawImage(video, 0, 0);
+              canvas.toBlob(
+                function(blob) {
+                  processed++;
+                  frames[frameNumber] = blob;
+                  if (video.ended && processed == inflight) {
+                    ended();
+                  }
+                },
+                'image/jpeg');
+            }(currentFrame);
           }
         }
 
@@ -152,7 +157,7 @@
           'loadedmetadata',
           function onMetadata(e) {
             video.removeEventListener('loadedmetadata', onMetadata);
-            compatibility.requestAnimationFrame(drawFrame);
+            compatibility.requestAnimationFrame(onBrowserAnimationFrame);
             extractionFoundDimensions(video.videoWidth, video.videoHeight);
           },
           false);
@@ -206,13 +211,23 @@
              });
       }
 
+      function downloadFrames() {
+        var zip = new JSZip();
+        for (var i = 0; i < frames.length; i++) {
+          zip.file(i + '.jpg', frames[i]);
+        }
+        zip.generateAsync({type:"blob"})
+           .then(function (blob) { saveAs(blob, "extracted-frames.zip"); });
+      }
+
+      var lastFrame = 0;
       function replay() {
         lastFrame = 0;
         nextFrame();
       }
 
       function nextFrame() {
-        if (lastFrame < 0 || lastFrame >= frames.length) {
+        if (lastFrame >= frames.length) {
           return;
         }
 
@@ -225,15 +240,6 @@
           URL.revokeObjectURL(this.src);
         };
         img.src = URL.createObjectURL(frames[lastFrame]);
-      }
-
-      function getFrames() {
-        var zip = new JSZip();
-        for (var i = 0; i < frames.length; i++) {
-          zip.file(i + '.jpg', frames[i]);
-        }
-        zip.generateAsync({type:"blob"})
-           .then(function (blob) { saveAs(blob, "extracted-frames.zip"); });
       }
     </script>
   </body>
