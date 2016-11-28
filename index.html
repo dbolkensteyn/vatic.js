@@ -6,6 +6,24 @@
     <title>VATIC-JS: A pure Javascript video annotation tool</title>
     <style>
       .output { font-family: monospace; font-weight: bold; }
+
+      .rectangle {
+        border: 1px solid #FF0000;
+        position: absolute;
+        z-index: 3;
+      }
+
+      #doodle {
+        position: relative;
+        z-index: 2;
+        width: 0px;
+        height: 0px;
+      }
+
+      #canvas {
+        position: absolute;
+        z-index: 1;
+      }
     </style>
   </head>
   <body>
@@ -40,7 +58,9 @@
       </li>
       <li>
         <p>Manually annotate the frame sequence:</p>
-        <canvas id="canvas"></canvas>
+        <div id="doodle">
+          <canvas id="canvas"></canvas>
+        </div>
         <p><input type="button" id="control" /></p>
         <p><label for="speed">Speed multiplier: </label><input type="text" id="speed" value="1.00" size="4" /></p>
         <p>Tip: Zoom in with your browser to place the bounding boxes more accurately.</p>
@@ -53,6 +73,7 @@
     <script type="text/javascript" src="dist/compatibility.js"></script>
     <script type="text/javascript" src="dist/jszip.js"></script>
     <script type="text/javascript" src="dist/FileSaver.js"></script>
+    <script type="text/javascript" src="dist/jsfeat.js"></script>
     <script type="text/javascript">
       // Should be higher than real FPS to not skip real frames
       // Hardcoded due to JS limitations
@@ -62,6 +83,7 @@
       var playbackRate = 0.4;
 
       var video = document.querySelector('#video');
+      var doodle = document.querySelector('#doodle');
       var canvas = document.querySelector('#canvas');
       var ctx = canvas.getContext('2d');
       var videoFile = document.querySelector('#videoFile');
@@ -98,9 +120,13 @@
       }
 
       function extractionFoundDimensions(width, height) {
+        doodle.style.width = width + 'px';
+        doodle.style.height = height + 'px';
         canvas.width = width;
         canvas.height = height;
         videoDimensionsElement.innerHTML = 'Video dimensions determined: ' + canvas.width + 'x' + canvas.height;
+
+        initOpticalFlow(width, height);
       }
 
       function extractionProgressed(percentage, framesSoFar) {
@@ -109,6 +135,16 @@
 
       function extractionCompleted() {
         extractionProgressElement.innerHTML = 'Extraction completed. ' + frames.length + ' frames captured.';
+
+        if (frames.length > 0) {
+          var img = new Image();
+          img.onload = function(e) {
+            ctx.drawImage(img, 0, 0);
+            URL.revokeObjectURL(this.src);
+          };
+          img.src = URL.createObjectURL(frames[0]);
+        }
+
         videoFile.disabled = false;
         zipFile.disabled = false;
         controlButton.disabled = false;
@@ -247,7 +283,6 @@
       // Playback region
 
       var lastFrame = 0;
-      var nextFrameTimeout = null;
 
       document.body.onkeyup = function(e) {
         if (e.keyCode == 32) {
@@ -271,9 +306,6 @@
           nextFrame();
         } else if (controlButton.value == 'Pause') {
           controlButton.value = 'Play';
-          if (nextFrameTimeout != null) {
-            clearTimeout(nextFrameTimeout);
-          }
         }
       }
 
@@ -283,11 +315,18 @@
           return;
         }
 
+        if (controlButton.value != 'Pause') {
+          return;
+        }
+
         var img = new Image();
         img.onload = function(e) {
           ctx.drawImage(img, 0, 0);
+
+          trackOpticalFlow(lastFrame);
+
           lastFrame++;
-          nextFrameTimeout = setTimeout(nextFrame, 1000 / (fps * parseFloat(speedInput.value)));
+          setTimeout(nextFrame, 1000 / (fps * parseFloat(speedInput.value)));
 
           URL.revokeObjectURL(this.src);
         };
@@ -297,6 +336,138 @@
       function resetControlButton() {
         controlButton.value = 'Play';
         lastFrame = 0;
+      }
+
+      // Bounding box drawing region
+
+      initDraw(document.querySelector('#doodle'));
+
+      var prev_img_pyr = new jsfeat.pyramid_t(3);
+      var curr_img_pyr = new jsfeat.pyramid_t(3);
+
+      var point_count = 0;
+      var point_status = new Uint8Array(100);
+      var prev_xy = new Float32Array(100*2);
+      var curr_xy = new Float32Array(100*2);
+
+      function initOpticalFlow(width, height) {
+        prev_img_pyr.allocate(width, height, jsfeat.U8_t | jsfeat.C1_t);
+        curr_img_pyr.allocate(width, height, jsfeat.U8_t | jsfeat.C1_t);
+      }
+
+      function trackOpticalFlow(frameNumber) {
+        // TODO: 1st frame?
+
+        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        jsfeat.imgproc.grayscale(imageData.data, canvas.width, canvas.height, curr_img_pyr.data[0]);
+        curr_img_pyr.build(curr_img_pyr.data[0], true);
+        jsfeat.optical_flow_lk.track(prev_img_pyr, curr_img_pyr, prev_xy, curr_xy, point_count, 30, 30, point_status, 0.01, 0.001);
+
+        console.log('before pruning: ' + point_count);
+        dump_points(prev_xy);
+        prune_oflow_points();
+        console.log('after pruning: ' + point_count);
+        dump_points(curr_xy);
+
+        if (point_count == 1) {
+          element2.style.left = Math.round(curr_xy[0] - width2 / 2) + 'px';
+          element2.style.top = Math.round(curr_xy[1] - height2 / 2) + 'px';
+        }
+
+        var old = prev_img_pyr;
+        prev_img_pyr = curr_img_pyr;
+        curr_img_pyr = old; // Buffer re-use
+
+        old = prev_xy;
+        prev_xy = curr_xy;
+        curr_xy = old; // Buffer re-use
+      }
+
+      function dump_points(a) {
+        for (var i = 0; i < point_count; i++) {
+          console.log('x: ' + a[i*2] + ', y: ' + a[i*2 + 1]);
+        }
+      }
+
+      function prune_oflow_points() {
+        var n = point_count;
+        var i=0,j=0;
+
+        for(; i < n; ++i) {
+          if(point_status[i] == 1) {
+            if(j < i) {
+              curr_xy[j<<1] = curr_xy[i<<1];
+              curr_xy[(j<<1)+1] = curr_xy[(i<<1)+1];
+            }
+            ++j;
+          }
+        }
+        point_count = j;
+      }
+
+        var element2 = null; // FIXME
+        var width2, height2, left2, top2; // FIXME
+
+      function initDraw(canvas) {
+        function setMousePosition(e) {
+          var ev = e || window.event;
+          if (ev.pageX) {
+            mouse.x = ev.pageX;
+            mouse.y = ev.pageY;
+          } else if (ev.clientX) {
+            mouse.x = ev.clientX;
+            mouse.y = ev.clientY;
+          }
+          mouse.x -= canvas.offsetLeft;
+          mouse.y -= canvas.offsetTop;
+        }
+
+        var mouse = {
+          x: 0,
+          y: 0,
+          startX: 0,
+          startY: 0
+        };
+        var element = null;
+
+        canvas.onmousemove = function (e) {
+          setMousePosition(e);
+          if (element !== null) {
+            width2 = Math.abs(mouse.x - mouse.startX);
+            height2 = Math.abs(mouse.y - mouse.startY);
+            left2 = (mouse.x - mouse.startX < 0) ? mouse.x : mouse.startX;
+            top2 = (mouse.y - mouse.startY < 0) ? mouse.y : mouse.startY;
+
+            element.style.width = width2 + 'px';
+            element.style.height = height2 + 'px';
+            element.style.left = left2 + 'px';
+            element.style.top = top2 + 'px';
+          }
+        }
+
+        canvas.onclick = function (e) {
+          if (element !== null) {
+            // FIXME
+            element2 = element;
+
+            element = null;
+
+            prev_xy[point_count*2] = left2 + width2 / 2;
+            prev_xy[point_count*2 + 1] = top2 + height2 / 2;
+            point_count++;
+
+            canvas.style.cursor = "default";
+          } else {
+            mouse.startX = mouse.x;
+            mouse.startY = mouse.y;
+            element = document.createElement('div');
+            element.className = 'rectangle';
+            element.style.left = mouse.x + 'px';
+            element.style.top = mouse.y + 'px';
+            canvas.appendChild(element);
+            canvas.style.cursor = "crosshair";
+          }
+        }
       }
     </script>
   </body>
