@@ -340,15 +340,23 @@
 
       // Bounding box drawing region
 
+      class TrackedObject {
+        constructor(dom, left, top) {
+          this.dom = dom;
+          this.width = 0;
+          this.height = 0;
+          this.left = left;
+          this.top = top;
+          this.visible = true;
+        }
+      }
+
+      var trackedObjects = [];
+
       initDraw(document.querySelector('#doodle'));
 
       var prev_img_pyr = new jsfeat.pyramid_t(3);
       var curr_img_pyr = new jsfeat.pyramid_t(3);
-
-      var point_count = 0;
-      var point_status = new Uint8Array(100);
-      var prev_xy = new Float32Array(100*2);
-      var curr_xy = new Float32Array(100*2);
 
       function initOpticalFlow(width, height) {
         prev_img_pyr.allocate(width, height, jsfeat.U8_t | jsfeat.C1_t);
@@ -358,55 +366,76 @@
       function trackOpticalFlow(frameNumber) {
         // TODO: 1st frame?
 
-        var imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        if (trackedObjects.length < 1) {
+          return;
+        }
+
+        let point_count = 0;
+        let point_status = new Uint8Array(320*176);
+        let prev_xy = new Float32Array(320*176*2);
+        let curr_xy = new Float32Array(320*176*2);
+
+        for (let i = 0; i < trackedObjects.length; i++) {
+          let trackedObject = trackedObjects[i];
+          if (!trackedObject.visible) {
+            continue;
+          }
+
+          for (let x = trackedObject.left; x < trackedObject.left + trackedObject.width; x++) {
+            for (let y = trackedObject.top; y < trackedObject.top + trackedObject.height; y++) {
+              prev_xy[point_count*2] = x;
+              prev_xy[point_count*2 + 1] = y;
+              point_count++;
+            }
+          }
+        }
+
+        let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         jsfeat.imgproc.grayscale(imageData.data, canvas.width, canvas.height, curr_img_pyr.data[0]);
         curr_img_pyr.build(curr_img_pyr.data[0], true);
-        jsfeat.optical_flow_lk.track(prev_img_pyr, curr_img_pyr, prev_xy, curr_xy, point_count, 30, 30, point_status, 0.01, 0.001);
 
-        console.log('before pruning: ' + point_count);
-        dump_points(prev_xy);
-        prune_oflow_points();
-        console.log('after pruning: ' + point_count);
-        dump_points(curr_xy);
+        if (point_count > 0) {
+          jsfeat.optical_flow_lk.track(prev_img_pyr, curr_img_pyr, prev_xy, curr_xy, point_count, 30, 30, point_status, 0.01, 0.001);
+        }
 
-        if (point_count == 1) {
-          element2.style.left = Math.round(curr_xy[0] - width2 / 2) + 'px';
-          element2.style.top = Math.round(curr_xy[1] - height2 / 2) + 'px';
+        point_count = 0;
+        for (let i = 0; i < trackedObjects.length; i++) {
+          let trackedObject = trackedObjects[i];
+          if (!trackedObject.visible) {
+            continue;
+          }
+
+          let diffX = [];
+          let diffY = [];
+          for (let x = trackedObject.left; x < trackedObject.left + trackedObject.width; x++) {
+            for (let y = trackedObject.top; y < trackedObject.top + trackedObject.height; y++) {
+              if (point_status[point_count] == 1) {
+                diffX.push(curr_xy[point_count*2] - prev_xy[point_count*2]);
+                diffY.push(curr_xy[point_count*2 + 1] - prev_xy[point_count*2 + 1]);
+              }
+              point_count++;
+            }
+          }
+          console.log('success ratio: ' + (diffX.length / (trackedObject.width * trackedObject.height) ).toFixed(2) + ', tracked pointed = ' + point_count);
+          if (diffX.length > 0 && diffX.length / (trackedObject.width * trackedObject.height) > 0.7) {
+            let medianX = jsfeat.math.median(diffX, 0, diffX.length - 1);
+            let medianY = jsfeat.math.median(diffY, 0, diffY.length - 1);
+
+            trackedObject.left += Math.round(medianX);
+            trackedObject.top += Math.round(medianY);
+            trackedObject.dom.style.left = trackedObject.left + 'px';
+            trackedObject.dom.style.top = trackedObject.top + 'px';
+          } else {
+            console.log('no longer visible!');
+            trackedObject.visible = false;
+            trackedObject.dom.style.top = '-100px';
+          }
         }
 
         var old = prev_img_pyr;
         prev_img_pyr = curr_img_pyr;
         curr_img_pyr = old; // Buffer re-use
-
-        old = prev_xy;
-        prev_xy = curr_xy;
-        curr_xy = old; // Buffer re-use
       }
-
-      function dump_points(a) {
-        for (var i = 0; i < point_count; i++) {
-          console.log('x: ' + a[i*2] + ', y: ' + a[i*2 + 1]);
-        }
-      }
-
-      function prune_oflow_points() {
-        var n = point_count;
-        var i=0,j=0;
-
-        for(; i < n; ++i) {
-          if(point_status[i] == 1) {
-            if(j < i) {
-              curr_xy[j<<1] = curr_xy[i<<1];
-              curr_xy[(j<<1)+1] = curr_xy[(i<<1)+1];
-            }
-            ++j;
-          }
-        }
-        point_count = j;
-      }
-
-        var element2 = null; // FIXME
-        var width2, height2, left2, top2; // FIXME
 
       function initDraw(canvas) {
         function setMousePosition(e) {
@@ -428,44 +457,38 @@
           startX: 0,
           startY: 0
         };
-        var element = null;
+        var newTrackedObject = null;
 
         canvas.onmousemove = function (e) {
           setMousePosition(e);
-          if (element !== null) {
-            width2 = Math.abs(mouse.x - mouse.startX);
-            height2 = Math.abs(mouse.y - mouse.startY);
-            left2 = (mouse.x - mouse.startX < 0) ? mouse.x : mouse.startX;
-            top2 = (mouse.y - mouse.startY < 0) ? mouse.y : mouse.startY;
+          if (newTrackedObject !== null) {
+            newTrackedObject.width = Math.abs(mouse.x - mouse.startX);
+            newTrackedObject.height = Math.abs(mouse.y - mouse.startY);
+            newTrackedObject.left = (mouse.x - mouse.startX < 0) ? mouse.x : mouse.startX;
+            newTrackedObject.top = (mouse.y - mouse.startY < 0) ? mouse.y : mouse.startY;
 
-            element.style.width = width2 + 'px';
-            element.style.height = height2 + 'px';
-            element.style.left = left2 + 'px';
-            element.style.top = top2 + 'px';
+            newTrackedObject.dom.style.width = newTrackedObject.width + 'px';
+            newTrackedObject.dom.style.height = newTrackedObject.height + 'px';
+            newTrackedObject.dom.style.left = newTrackedObject.left + 'px';
+            newTrackedObject.dom.style.top = newTrackedObject.top + 'px';
           }
         }
 
         canvas.onclick = function (e) {
-          if (element !== null) {
-            // FIXME
-            element2 = element;
-
-            element = null;
-
-            prev_xy[point_count*2] = left2 + width2 / 2;
-            prev_xy[point_count*2 + 1] = top2 + height2 / 2;
-            point_count++;
-
-            canvas.style.cursor = "default";
+          if (newTrackedObject !== null) {
+            trackedObjects.push(newTrackedObject);
+            newTrackedObject = null;
+            canvas.style.cursor = 'default';
           } else {
             mouse.startX = mouse.x;
             mouse.startY = mouse.y;
-            element = document.createElement('div');
-            element.className = 'rectangle';
-            element.style.left = mouse.x + 'px';
-            element.style.top = mouse.y + 'px';
-            canvas.appendChild(element);
-            canvas.style.cursor = "crosshair";
+            dom = document.createElement('div');
+            dom.className = 'rectangle';
+            dom.style.left = mouse.x + 'px';
+            dom.style.top = mouse.y + 'px';
+            canvas.appendChild(dom);
+            newTrackedObject = new TrackedObject(dom, mouse.x, mouse.y);
+            canvas.style.cursor = 'crosshair';
           }
         }
       }
