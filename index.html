@@ -72,7 +72,8 @@
 
     <script type="text/javascript" src="dist/compatibility.js"></script>
     <script type="text/javascript" src="dist/jszip.js"></script>
-    <script type="text/javascript" src="dist/FileSaver.js"></script>
+    <script type="text/javascript" src="dist/StreamSaver.js"></script>
+    <script type="text/javascript" src="dist/polyfill.js"></script>
     <script type="text/javascript" src="dist/jsfeat.js"></script>
     <script type="text/javascript">
       // Should be higher than real FPS to not skip real frames
@@ -273,11 +274,17 @@
 
       function downloadFrames() {
         var zip = new JSZip();
+
         for (var i = 0; i < frames.length; i++) {
           zip.file(i + '.jpg', frames[i]);
         }
-        zip.generateAsync({type: "blob"})
-           .then(function (blob) { saveAs(blob, "extracted-frames.zip"); });
+
+        let writeStream = streamSaver.createWriteStream('extracted-frames.zip').getWriter();
+        zip.generateInternalStream({type: 'uint8array', streamFiles: true})
+           .on('data', data => writeStream.write(data))
+           .on('error', err => console.error(err))
+           .on('end', () => writeStream.close())
+           .resume();
       }
 
       // Playback region
