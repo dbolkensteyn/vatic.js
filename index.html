@@ -388,8 +388,8 @@
             continue;
           }
 
-          for (let x = trackedObject.left; x < trackedObject.left + trackedObject.width; x++) {
-            for (let y = trackedObject.top; y < trackedObject.top + trackedObject.height; y++) {
+          for (let x = trackedObject.left; x < trackedObject.left + trackedObject.width; x += Math.max(1, Math.round(trackedObject.width / 10))) {
+            for (let y = trackedObject.top; y < trackedObject.top + trackedObject.height; y += Math.max(1, Math.round(trackedObject.height / 10))) {
               prev_xy[point_count*2] = x;
               prev_xy[point_count*2 + 1] = y;
               point_count++;
@@ -414,8 +414,8 @@
 
           let diffX = [];
           let diffY = [];
-          for (let x = trackedObject.left; x < trackedObject.left + trackedObject.width; x++) {
-            for (let y = trackedObject.top; y < trackedObject.top + trackedObject.height; y++) {
+          for (let x = trackedObject.left; x < trackedObject.left + trackedObject.width; x += Math.max(1, Math.round(trackedObject.width / 10))) {
+            for (let y = trackedObject.top; y < trackedObject.top + trackedObject.height; y += Math.max(1, Math.round(trackedObject.height / 10))) {
               if (point_status[point_count] == 1) {
                 diffX.push(curr_xy[point_count*2] - prev_xy[point_count*2]);
                 diffY.push(curr_xy[point_count*2 + 1] - prev_xy[point_count*2 + 1]);
@@ -424,7 +424,7 @@
             }
           }
           console.log('success ratio: ' + (diffX.length / (trackedObject.width * trackedObject.height) ).toFixed(2) + ', tracked pointed = ' + point_count);
-          if (diffX.length > 0 && diffX.length / (trackedObject.width * trackedObject.height) > 0.7) {
+          if (diffX.length > 0) {
             let medianX = jsfeat.math.median(diffX, 0, diffX.length - 1);
             let medianY = jsfeat.math.median(diffY, 0, diffY.length - 1);
 
