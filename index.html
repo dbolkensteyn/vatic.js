@@ -299,18 +299,24 @@
       // Download frames region
 
       function downloadFrames() {
-        var zip = new JSZip();
+        let zip = new JSZip();
 
-        for (var i = 0; i < frames.length; i++) {
-          zip.file(i + '.jpg', frames[i]);
+        let processed = 0;
+        for (let i = 0; i < totalFrames; i++) {
+          getFrame(i, function(blob) {
+            zip.file(i + '.jpg', blob);
+            processed++;
+
+            if (processed == totalFrames) {
+              let writeStream = streamSaver.createWriteStream('extracted-frames.zip').getWriter();
+              zip.generateInternalStream({type: 'uint8array', streamFiles: true})
+                 .on('data', data => writeStream.write(data))
+                 .on('error', err => console.error(err))
+                 .on('end', () => writeStream.close())
+                 .resume();
+            }
+          });
         }
-
-        let writeStream = streamSaver.createWriteStream('extracted-frames.zip').getWriter();
-        zip.generateInternalStream({type: 'uint8array', streamFiles: true})
-           .on('data', data => writeStream.write(data))
-           .on('error', err => console.error(err))
-           .on('end', () => writeStream.close())
-           .resume();
       }
 
       // Playback region
