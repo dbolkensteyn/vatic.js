@@ -75,6 +75,7 @@
     <script type="text/javascript" src="dist/StreamSaver.js"></script>
     <script type="text/javascript" src="dist/polyfill.js"></script>
     <script type="text/javascript" src="dist/jsfeat.js"></script>
+    <script type="text/javascript" src="https://cdn.jsdelivr.net/pouchdb/6.0.7/pouchdb.min.js"></script>
     <script type="text/javascript">
       // Should be higher than real FPS to not skip real frames
       // Hardcoded due to JS limitations
@@ -101,23 +102,42 @@
       controlButton.addEventListener('click', controlClicked, false);
       downloadFramesButton.addEventListener('click', downloadFrames, false);
 
-      var frames;
+      // Frames handling
+      var db = null;
+      var totalFrames = 0;
+
+      function addFrame(frameNumber, blob, callback) {
+        totalFrames++;
+        return db.putAttachment(frameNumber.toString(), 'img.jpg', blob, 'image/jpeg').then(function(doc) { callback(); });
+      }
+
+      function getFrame(frameNumber, callback) {
+        db.getAttachment(frameNumber.toString(), 'img.jpg').then(function(blob) { callback(blob); });
+      }
 
       // Initialize state
-      extractionStarting(true);
+      extractionStarting(null, true);
 
       // Frame extraction region
 
-      function extractionStarting(isInitialization = false) {
+      function extractionStarting(callback, isInitialization = false) {
         if (!isInitialization) {
           videoFile.disabled = true;
           zipFile.disabled = true;
         }
 
-        frames = [];
-        resetControlButton();
-        controlButton.disabled = true;
-        downloadFramesButton.disabled = true;
+        db = new PouchDB('vatic_js').destroy().then(function() {
+          db = new PouchDB('vatic_js');
+          totalFrames = 0;
+
+          resetControlButton();
+          controlButton.disabled = true;
+          downloadFramesButton.disabled = true;
+
+          if (callback != null) {
+            callback();
+          }
+        });
       }
 
       function extractionFoundDimensions(width, height) {
@@ -135,15 +155,17 @@
       }
 
       function extractionCompleted() {
-        extractionProgressElement.innerHTML = 'Extraction completed. ' + frames.length + ' frames captured.';
+        extractionProgressElement.innerHTML = 'Extraction completed. ' + totalFrames + ' frames captured.';
 
-        if (frames.length > 0) {
-          var img = new Image();
-          img.onload = function(e) {
-            ctx.drawImage(img, 0, 0);
-            URL.revokeObjectURL(this.src);
-          };
-          img.src = URL.createObjectURL(frames[0]);
+        if (totalFrames > 0) {
+          getFrame(0, function(blob) {
+            let img = new Image();
+            img.onload = function(e) {
+              ctx.drawImage(img, 0, 0);
+              URL.revokeObjectURL(this.src);
+            };
+            img.src = URL.createObjectURL(blob);
+          });
         }
 
         videoFile.disabled = false;
@@ -153,16 +175,6 @@
       }
 
       function extractFramesFromVideo() {
-        if (this.files.length == 0) {
-          return;
-        }
-
-        var lastApproxFrame = -1;
-        var frameCounter = 0;
-        var processed = 0;
-
-        extractionStarting();
-
         function onBrowserAnimationFrame() {
           if (video.ended) {
             if (processed == frameCounter) {
@@ -190,11 +202,12 @@
               ctx.drawImage(video, 0, 0);
               canvas.toBlob(
                 function(blob) {
-                  processed++;
-                  frames[frameNumber] = blob;
-                  if (video.ended && processed == frameCounter) {
-                    ended();
-                  }
+                  addFrame(frameNumber, blob, function() {
+                    processed++;
+                    if (video.ended && processed == frameCounter) {
+                      ended();
+                    }
+                  });
                 },
                 'image/jpeg');
             }(frameCounter - 1);
@@ -209,20 +222,30 @@
           }
         }
 
-        video.autoplay = false;
-        video.muted = true;
-        video.loop = false;
-        video.addEventListener(
-          'loadedmetadata',
-          function onMetadata(e) {
-            video.removeEventListener('loadedmetadata', onMetadata);
-            compatibility.requestAnimationFrame(onBrowserAnimationFrame);
-            extractionFoundDimensions(video.videoWidth, video.videoHeight);
-          },
-          false);
-        video.src = URL.createObjectURL(this.files[0]);
-        video.playbackRate = playbackRate;
-        video.play();
+        if (this.files.length == 0) {
+          return;
+        }
+
+        var lastApproxFrame = -1;
+        var frameCounter = 0;
+        var processed = 0;
+
+        extractionStarting(function() {
+          video.autoplay = false;
+          video.muted = true;
+          video.loop = false;
+          video.addEventListener(
+            'loadedmetadata',
+            function onMetadata(e) {
+              video.removeEventListener('loadedmetadata', onMetadata);
+              compatibility.requestAnimationFrame(onBrowserAnimationFrame);
+              extractionFoundDimensions(video.videoWidth, video.videoHeight);
+            },
+            false);
+          video.src = URL.createObjectURL(videoFile.files[0]);
+          video.playbackRate = playbackRate;
+          video.play();
+        });
       }
 
       function extractFramesFromArchive() {
@@ -230,44 +253,47 @@
           return;
         }
 
-        extractionStarting();
+        extractionStarting(function() {
+          JSZip.loadAsync(zipFile.files[0])
+              .then(function(zip) {
+                var total = 0;
+                for (var i = 0; ; i++) {
+                  var frame = zip.file(i + '.jpg');
+                  if (frame == null) {
+                    total = i;
+                    break;
+                  }
+                }
 
-        JSZip.loadAsync(this.files[0])
-             .then(function(zip) {
-               var total = 0;
-               for (var i = 0; ; i++) {
-                 var frame = zip.file(i + '.jpg');
-                 if (frame == null) {
-                   total = i;
-                   break;
-                 }
-               }
+                var processed = 0;
+                for (var i = 0; i < total; i++) {
+                  var _ = function (frameNumber) {
+                    var frame = zip.file(frameNumber + '.jpg');
+                    frame.async('arraybuffer')
+                          .then(function(content) {
+                            let blob = new Blob([ content ], {type: 'image/jpeg'});
 
-               var processed = 0;
-               for (var i = 0; i < total; i++) {
-                 var _ = function (frameNumber) {
-                   var frame = zip.file(frameNumber + '.jpg');
-                   frame.async('arraybuffer')
-                        .then(function(content) {
-                          processed++;
-                          frames[frameNumber] = new Blob([ content ]);
-                          if (frameNumber == 0) {
-                            var img = new Image();
-                            img.onload = function(e) {
-                              extractionFoundDimensions(this.width, this.height);
-                              URL.revokeObjectURL(this.src);
-                            };
-                            img.src = URL.createObjectURL(frames[0]);
-                          }
-                          extractionProgressed(processed / total, processed);
+                            if (frameNumber == 0) {
+                              let img = new Image();
+                              img.onload = function(e) {
+                                extractionFoundDimensions(this.width, this.height);
+                                URL.revokeObjectURL(this.src);
+                              };
+                              img.src = URL.createObjectURL(blob);
+                            }
 
-                          if (processed == total) {
-                            extractionCompleted();
-                          }
-                        });
-                 }(i);
-               }
-             });
+                            addFrame(frameNumber, blob, function() {
+                              processed++;
+                              extractionProgressed(processed / total, processed);
+                              if (processed == total) {
+                                extractionCompleted();
+                              }
+                            });
+                          });
+                  }(i);
+                }
+              });
+        });
       }
 
       // Download frames region
@@ -317,7 +343,7 @@
       }
 
       function nextFrame() {
-        if (lastFrame >= frames.length) {
+        if (lastFrame >= totalFrames) {
           controlButton.value = 'Replay';
           return;
         }
@@ -326,18 +352,20 @@
           return;
         }
 
-        var img = new Image();
-        img.onload = function(e) {
-          ctx.drawImage(img, 0, 0);
+        getFrame(lastFrame, function(blob) {
+          var img = new Image();
+          img.onload = function(e) {
+            ctx.drawImage(img, 0, 0);
 
-          trackOpticalFlow(lastFrame);
+            trackOpticalFlow(lastFrame);
 
-          lastFrame++;
-          setTimeout(nextFrame, 1000 / (fps * parseFloat(speedInput.value)));
+            lastFrame++;
+            setTimeout(nextFrame, 1000 / (fps * parseFloat(speedInput.value)));
 
-          URL.revokeObjectURL(this.src);
-        };
-        img.src = URL.createObjectURL(frames[lastFrame]);
+            URL.revokeObjectURL(this.src);
+          };
+          img.src = URL.createObjectURL(blob);
+        });
       }
 
       function resetControlButton() {
