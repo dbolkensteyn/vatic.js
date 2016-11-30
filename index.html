@@ -83,8 +83,12 @@
         // Low rate decreases the chance of losing frames with poor browser performances
         playbackRate: 0.4,
 
+        // Format of the extracted frames
         imageMimeType: 'image/jpeg',
-        imageExtension: '.jpg'
+        imageExtension: '.jpg',
+
+        // Name of the extracted frames zip archive
+        framesZipFilename: 'extracted-frames.zip'
       };
 
       // Orchestration region
@@ -100,36 +104,74 @@
       let controlButton = document.querySelector('#control');
       let speedInput = document.querySelector('#speed');
 
-      videoFile.addEventListener(
-        'change',
-        function() {
-          if (this.files.length == 1) {
-            extractFramesFromVideo(config, this.files[0]).then(function(r) {
-              console.log('extraction from video ended! total frames = ' + r.totalFrames());
-              r.getFrame(0).then(function(blob) { console.log('1st frame:'); console.log(blob); });
-            });
-          }
-        },
-        false);
-      zipFile.addEventListener(
-        'change',
-        function() {
-          if (this.files.length == 1) {
-            extractFramesFromZip(config, this.files[0]).then(function(r) {
-              console.log('extraction from zip ended! total frames = ' + r.totalFrames());
-              r.getFrame(0).then(function(blob) { console.log('1st frame:'); console.log(blob); });
-            });
-          }
-        },
-        false);
-
+      videoFile.addEventListener('change', extractionFileUploaded, false);
+      zipFile.addEventListener('change', extractionFileUploaded, false);
       controlButton.addEventListener('click', controlClicked, false);
       downloadFramesButton.addEventListener('click', downloadFrames, false);
 
-      // Initialize state
-      extractionStarting(null, true);
+      function blobToImage(blob) {
+        return new Promise(function(result, _) {
+          let img = new Image();
+          img.onload = function() {
+            result(img);
+            URL.revokeObjectURL(this.src);
+          };
+          img.src = URL.createObjectURL(blob);
+        });
+      }
 
-      // Frame extraction region
+      function extractionFileUploaded() {
+        if (this.files.length != 1) {
+          return;
+        }
+
+        let promise;
+        if (this == videoFile) {
+          let dimensionsInitialized = false;
+
+          promise = extractFramesFromVideo(
+            config,
+            this.files[0],
+            function progress(percentage, framesSoFar, lastFrameBlob) {
+              blobToImage(lastFrameBlob).then(function(img) {
+                if (!dimensionsInitialized) {
+                  dimensionsInitialized = true;
+                  doodle.style.width = img.width + 'px';
+                  doodle.style.height = img.height + 'px';
+                  canvas.width = img.width;
+                  canvas.height = img.height;
+                }
+                ctx.drawImage(img, 0, 0);
+
+                videoDimensionsElement.innerHTML = 'Video dimensions determined: ' + img.width + 'x' + img.height;
+                extractionProgressElement.innerHTML = (percentage * 100).toFixed(2) + ' % completed. ' + framesSoFar + ' frames extracted.';
+              });
+            });
+        } else {
+          promise = extractFramesFromZip(config, this.files[0]);
+        }
+
+        promise.then(function(frames) {
+          extractionProgressElement.innerHTML = 'Extraction completed. ' + frames.totalFrames() + ' frames captured.';
+          if (frames.totalFrames() > 0) {
+            frames.getFrame(0).then(function(blob) {
+              blobToImage(blob).then(function(img) {
+                doodle.style.width = img.width + 'px';
+                doodle.style.height = img.height + 'px';
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                videoDimensionsElement.innerHTML = 'Video dimensions determined: ' + img.width + 'x' + img.height;
+              });
+            });
+          }
+          frames.getFrame(0).then(function(blob) { console.log('1st frame:'); console.log(blob); });
+        });
+      }
+
+      // Garbage region
+
+      extractionStarting(null, true);
 
       function extractionStarting(callback, isInitialization = false) {
         if (!isInitialization) {
@@ -150,10 +192,6 @@
         videoDimensionsElement.innerHTML = 'Video dimensions determined: ' + canvas.width + 'x' + canvas.height;
 
         initOpticalFlow(width, height);
-      }
-
-      function extractionProgressed(percentage, framesSoFar) {
-        extractionProgressElement.innerHTML = (percentage * 100).toFixed(2) + ' % completed. ' + framesSoFar + ' frames extracted.';
       }
 
       function extractionCompleted() {
@@ -178,44 +216,37 @@
 
       // Frame extraction region
 
-      function extractFramesFromVideo(config, file) {
+      function extractFramesFromVideo(config, file, progress) {
         let resolve = null;
         let db = null;
         let video = document.createElement('video');
+        let canvas = document.createElement('canvas');
+        let ctx = canvas.getContext('2d');
+        let dimensionsInitialized = false;
         let totalFrames = 0;
         let processedFrames = 0;
         let lastApproxFrame = -1;
         let attachmentName = 'img' + config.imageExtension;
 
-        return new Promise(
-          function(_resolve, _) {
-            resolve = _resolve;
+        return new Promise(function(_resolve, _) {
+          resolve = _resolve;
 
-            let dbName = 'vatic_js';
-            db = new PouchDB(dbName).destroy().then(function() {
-              db = new PouchDB(dbName);
+          let dbName = 'vatic_js';
+          db = new PouchDB(dbName).destroy().then(function() {
+            db = new PouchDB(dbName);
 
-              video.autoplay = false;
-              video.muted = true;
-              video.loop = false;
-              let loadedmetadataEventName = 'loadedmetadata';
-              video.addEventListener(
-                loadedmetadataEventName,
-                function onMetadataLoaded(e) {
-                  video.removeEventListener(loadedmetadataEventName, onMetadataLoaded);
-                  compatibility.requestAnimationFrame(onBrowserAnimationFrame);
-                  extractionFoundDimensions(video.videoWidth, video.videoHeight);
-                },
-                false);
-              video.src = URL.createObjectURL(file);
-              video.playbackRate = config.playbackRate;
-              video.play();
-            });
-          }
-        );
+            video.autoplay = false;
+            video.muted = true;
+            video.loop = false;
+            video.playbackRate = config.playbackRate;
+            video.src = URL.createObjectURL(file);
+            compatibility.requestAnimationFrame(onBrowserAnimationFrame);
+            video.play();
+          });
+        });
 
         function onBrowserAnimationFrame() {
-          if (video.ended) {
+          if (dimensionsInitialized && video.ended) {
             if (processedFrames == totalFrames) {
               videoEnded();
             }
@@ -230,19 +261,26 @@
             return;
           }
 
-          extractionProgressed(video.currentTime / video.duration, processedFrames);
-
           let currentApproxFrame = Math.round(video.currentTime * config.fps);
           if (currentApproxFrame != lastApproxFrame) {
             lastApproxFrame = currentApproxFrame;
             let frameNumber = totalFrames;
             totalFrames++;
 
-            ctx.drawImage(video, 0, 0); // FIXME: Global
-            canvas.toBlob( // FIXME: Global
+            if (!dimensionsInitialized) {
+              dimensionsInitialized = true;
+              canvas.width = video.videoWidth;
+              canvas.height = video.videoHeight;
+            }
+
+            ctx.drawImage(video, 0, 0);
+            canvas.toBlob(
               function(blob) {
                 db.putAttachment(frameNumber.toString(), attachmentName, blob, config.imageMimeType).then(function(doc) {
                   processedFrames++;
+
+                  progress(video.currentTime / video.duration, processedFrames, blob);
+
                   if (video.ended && processedFrames == totalFrames) {
                     videoEnded();
                   }
@@ -268,33 +306,33 @@
       }
 
       function extractFramesFromZip(config, file) {
-        return new Promise(
-          function(resolve, _) {
-            JSZip.loadAsync(file)
-                .then(function(zip) {
-                  let totalFrames = 0;
-                  for (var i = 0; ; i++) {
-                    let file = zip.file(i + config.imageExtension);
-                    if (file == null) {
-                      totalFrames = i;
-                      break;
-                    }
-                  }
+        return new Promise(function(resolve, _) {
+          JSZip
+            .loadAsync(file)
+            .then(function(zip) {
+              let totalFrames = 0;
+              for (var i = 0; ; i++) {
+                let file = zip.file(i + config.imageExtension);
+                if (file == null) {
+                  totalFrames = i;
+                  break;
+                }
+              }
 
-                  resolve({
-                    totalFrames: function() { return totalFrames; },
-                    getFrame(frameNumber) {
-                      return new Promise(
-                        function (resolve, _) {
-                          let file = zip.file(frameNumber + config.imageExtension);
-                          file.async('arraybuffer')
-                              .then(function(content) {
-                                let blob = new Blob([ content ], {type: 'image/jpeg'});
-                                resolve(blob);
-                          });
+              resolve({
+                totalFrames: function() { return totalFrames; },
+                getFrame(frameNumber) {
+                  return new Promise(function (resolve, _) {
+                    let file = zip.file(frameNumber + config.imageExtension);
+                    file
+                      .async('arraybuffer')
+                      .then(function(content) {
+                        let blob = new Blob([ content ], {type: config.imageMimeType});
+                        resolve(blob);
                       });
-                    }
                   });
+                }
+              });
             });
         });
       }
