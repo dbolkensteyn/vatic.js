@@ -27,8 +27,6 @@
     </style>
   </head>
   <body>
-    <video id="video" style="display: none;"></video>
-
     <h1>VATIC-JS: A pure Javascript video annotation tool</h1>
 
     <ol>
@@ -77,43 +75,56 @@
     <script type="text/javascript" src="dist/jsfeat.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/pouchdb/6.0.7/pouchdb.min.js"></script>
     <script type="text/javascript">
-      // Should be higher than real FPS to not skip real frames
-      // Hardcoded due to JS limitations
-      var fps = 30;
+      let config = {
+        // Should be higher than real FPS to not skip real frames
+        // Hardcoded due to JS limitations
+        fps: 30,
 
-      // Low rate decreases the chance of losing frames with poor browser performances
-      var playbackRate = 0.4;
+        // Low rate decreases the chance of losing frames with poor browser performances
+        playbackRate: 0.4,
 
-      var video = document.querySelector('#video');
-      var doodle = document.querySelector('#doodle');
-      var canvas = document.querySelector('#canvas');
-      var ctx = canvas.getContext('2d');
-      var videoFile = document.querySelector('#videoFile');
-      var zipFile = document.querySelector('#zipFile');
-      var videoDimensionsElement = document.querySelector('#videoDimensions');
-      var extractionProgressElement = document.querySelector('#extractionProgress');
-      var downloadFramesButton = document.querySelector('#downloadFrames');
-      var controlButton = document.querySelector('#control');
-      var speedInput = document.querySelector('#speed');
+        imageMimeType: 'image/jpeg',
+        imageExtension: '.jpg'
+      };
 
-      videoFile.addEventListener('change', extractFramesFromVideo, false);
-      zipFile.addEventListener('change', extractFramesFromArchive, false);
+      // Orchestration region
+
+      let doodle = document.querySelector('#doodle');
+      let canvas = document.querySelector('#canvas');
+      let ctx = canvas.getContext('2d');
+      let videoFile = document.querySelector('#videoFile');
+      let zipFile = document.querySelector('#zipFile');
+      let videoDimensionsElement = document.querySelector('#videoDimensions');
+      let extractionProgressElement = document.querySelector('#extractionProgress');
+      let downloadFramesButton = document.querySelector('#downloadFrames');
+      let controlButton = document.querySelector('#control');
+      let speedInput = document.querySelector('#speed');
+
+      videoFile.addEventListener(
+        'change',
+        function() {
+          if (this.files.length == 1) {
+            extractFramesFromVideo(config, this.files[0]).then(function(r) {
+              console.log('extraction from video ended! total frames = ' + r.totalFrames());
+              r.getFrame(0).then(function(blob) { console.log('1st frame:'); console.log(blob); });
+            });
+          }
+        },
+        false);
+      zipFile.addEventListener(
+        'change',
+        function() {
+          if (this.files.length == 1) {
+            extractFramesFromZip(config, this.files[0]).then(function(r) {
+              console.log('extraction from zip ended! total frames = ' + r.totalFrames());
+              r.getFrame(0).then(function(blob) { console.log('1st frame:'); console.log(blob); });
+            });
+          }
+        },
+        false);
 
       controlButton.addEventListener('click', controlClicked, false);
       downloadFramesButton.addEventListener('click', downloadFrames, false);
-
-      // Frames handling
-      var db = null;
-      var totalFrames = 0;
-
-      function addFrame(frameNumber, blob, callback) {
-        totalFrames++;
-        return db.putAttachment(frameNumber.toString(), 'img.jpg', blob, 'image/jpeg').then(function(doc) { callback(); });
-      }
-
-      function getFrame(frameNumber, callback) {
-        db.getAttachment(frameNumber.toString(), 'img.jpg').then(function(blob) { callback(blob); });
-      }
 
       // Initialize state
       extractionStarting(null, true);
@@ -126,18 +137,9 @@
           zipFile.disabled = true;
         }
 
-        db = new PouchDB('vatic_js').destroy().then(function() {
-          db = new PouchDB('vatic_js');
-          totalFrames = 0;
-
-          resetControlButton();
-          controlButton.disabled = true;
-          downloadFramesButton.disabled = true;
-
-          if (callback != null) {
-            callback();
-          }
-        });
+        resetControlButton();
+        controlButton.disabled = true;
+        downloadFramesButton.disabled = true;
       }
 
       function extractionFoundDimensions(width, height) {
@@ -174,11 +176,48 @@
         downloadFramesButton.disabled = false;
       }
 
-      function extractFramesFromVideo() {
+      // Frame extraction region
+
+      function extractFramesFromVideo(config, file) {
+        let resolve = null;
+        let db = null;
+        let video = document.createElement('video');
+        let totalFrames = 0;
+        let processedFrames = 0;
+        let lastApproxFrame = -1;
+        let attachmentName = 'img' + config.imageExtension;
+
+        return new Promise(
+          function(_resolve, _) {
+            resolve = _resolve;
+
+            let dbName = 'vatic_js';
+            db = new PouchDB(dbName).destroy().then(function() {
+              db = new PouchDB(dbName);
+
+              video.autoplay = false;
+              video.muted = true;
+              video.loop = false;
+              let loadedmetadataEventName = 'loadedmetadata';
+              video.addEventListener(
+                loadedmetadataEventName,
+                function onMetadataLoaded(e) {
+                  video.removeEventListener(loadedmetadataEventName, onMetadataLoaded);
+                  compatibility.requestAnimationFrame(onBrowserAnimationFrame);
+                  extractionFoundDimensions(video.videoWidth, video.videoHeight);
+                },
+                false);
+              video.src = URL.createObjectURL(file);
+              video.playbackRate = config.playbackRate;
+              video.play();
+            });
+          }
+        );
+
         function onBrowserAnimationFrame() {
           if (video.ended) {
-            if (processed == frameCounter) {
-              ended();
+            if (processedFrames == totalFrames) {
+              videoEnded();
             }
             return;
           }
@@ -191,108 +230,72 @@
             return;
           }
 
-          extractionProgressed(video.currentTime / video.duration, processed);
+          extractionProgressed(video.currentTime / video.duration, processedFrames);
 
-          var currentApproxFrame = Math.round(video.currentTime * fps);
+          let currentApproxFrame = Math.round(video.currentTime * config.fps);
           if (currentApproxFrame != lastApproxFrame) {
             lastApproxFrame = currentApproxFrame;
-            frameCounter++;
+            let frameNumber = totalFrames;
+            totalFrames++;
 
-            var _ = function(frameNumber) {
-              ctx.drawImage(video, 0, 0);
-              canvas.toBlob(
-                function(blob) {
-                  addFrame(frameNumber, blob, function() {
-                    processed++;
-                    if (video.ended && processed == frameCounter) {
-                      ended();
-                    }
-                  });
-                },
-                'image/jpeg');
-            }(frameCounter - 1);
+            ctx.drawImage(video, 0, 0); // FIXME: Global
+            canvas.toBlob( // FIXME: Global
+              function(blob) {
+                db.putAttachment(frameNumber.toString(), attachmentName, blob, config.imageMimeType).then(function(doc) {
+                  processedFrames++;
+                  if (video.ended && processedFrames == totalFrames) {
+                    videoEnded();
+                  }
+                });
+              },
+              config.imageMimeType);
           }
         }
 
-        function ended() {
+        function videoEnded() {
           if (video.src != '') {
             URL.revokeObjectURL(video.src);
             video.src = '';
-            extractionCompleted();
+
+            resolve({
+              totalFrames: function() { return totalFrames; },
+              getFrame(frameNumber) {
+                return db.getAttachment(frameNumber.toString(), attachmentName);
+              }
+            });
           }
         }
-
-        if (this.files.length == 0) {
-          return;
-        }
-
-        var lastApproxFrame = -1;
-        var frameCounter = 0;
-        var processed = 0;
-
-        extractionStarting(function() {
-          video.autoplay = false;
-          video.muted = true;
-          video.loop = false;
-          video.addEventListener(
-            'loadedmetadata',
-            function onMetadata(e) {
-              video.removeEventListener('loadedmetadata', onMetadata);
-              compatibility.requestAnimationFrame(onBrowserAnimationFrame);
-              extractionFoundDimensions(video.videoWidth, video.videoHeight);
-            },
-            false);
-          video.src = URL.createObjectURL(videoFile.files[0]);
-          video.playbackRate = playbackRate;
-          video.play();
-        });
       }
 
-      function extractFramesFromArchive() {
-        if (this.files.length == 0) {
-          return;
-        }
-
-        extractionStarting(function() {
-          JSZip.loadAsync(zipFile.files[0])
-              .then(function(zip) {
-                var total = 0;
-                for (var i = 0; ; i++) {
-                  var frame = zip.file(i + '.jpg');
-                  if (frame == null) {
-                    total = i;
-                    break;
+      function extractFramesFromZip(config, file) {
+        return new Promise(
+          function(resolve, _) {
+            JSZip.loadAsync(file)
+                .then(function(zip) {
+                  let totalFrames = 0;
+                  for (var i = 0; ; i++) {
+                    let file = zip.file(i + config.imageExtension);
+                    if (file == null) {
+                      totalFrames = i;
+                      break;
+                    }
                   }
-                }
 
-                var processed = 0;
-                for (var i = 0; i < total; i++) {
-                  var _ = function (frameNumber) {
-                    var frame = zip.file(frameNumber + '.jpg');
-                    frame.async('arraybuffer')
-                          .then(function(content) {
-                            let blob = new Blob([ content ], {type: 'image/jpeg'});
-
-                            if (frameNumber == 0) {
-                              let img = new Image();
-                              img.onload = function(e) {
-                                extractionFoundDimensions(this.width, this.height);
-                                URL.revokeObjectURL(this.src);
-                              };
-                              img.src = URL.createObjectURL(blob);
-                            }
-
-                            addFrame(frameNumber, blob, function() {
-                              processed++;
-                              extractionProgressed(processed / total, processed);
-                              if (processed == total) {
-                                extractionCompleted();
-                              }
-                            });
+                  resolve({
+                    totalFrames: function() { return totalFrames; },
+                    getFrame(frameNumber) {
+                      return new Promise(
+                        function (resolve, _) {
+                          let file = zip.file(frameNumber + config.imageExtension);
+                          file.async('arraybuffer')
+                              .then(function(content) {
+                                let blob = new Blob([ content ], {type: 'image/jpeg'});
+                                resolve(blob);
                           });
-                  }(i);
-                }
-              });
+                      });
+                    }
+                  });
+            });
         });
       }
 
@@ -311,7 +314,6 @@
               let writeStream = streamSaver.createWriteStream('extracted-frames.zip').getWriter();
               zip.generateInternalStream({type: 'uint8array', streamFiles: true})
                  .on('data', data => writeStream.write(data))
-                 .on('error', err => console.error(err))
                  .on('end', () => writeStream.close())
                  .resume();
             }
