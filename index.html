@@ -43,7 +43,7 @@
         <p class="output" id="extractionProgress"></p>
       </li>
       <li>
-        <p>Download the extracted frames zip archive: <button id="downloadFrames">Get frames zip archive</button></p>
+        <p>Download the extracted frames zip archive: <input type="button" id="downloadFrames" value="Get frames zip archive" disabled="disabled" /></p>
       </li>
       <li>
         <p>Optional: Load an existing <a href="http://web.mit.edu/vondrick/vatic/" target="new">VATIC</a>-compatible XML annotation file.</p>
@@ -59,7 +59,7 @@
         <div id="doodle">
           <canvas id="canvas"></canvas>
         </div>
-        <p><input type="button" id="control" /></p>
+        <p><input type="button" id="play" value="Play" disabled="true" /><input type="button" id="pause" value="Pause" disabled="true" style="display: none;" /></p>
         <p><label for="speed">Speed multiplier: </label><input type="text" id="speed" value="1.00" size="4" /></p>
         <p>Tip: Zoom in with your browser to place the bounding boxes more accurately.</p>
       </li>
@@ -101,13 +101,148 @@
       let videoDimensionsElement = document.querySelector('#videoDimensions');
       let extractionProgressElement = document.querySelector('#extractionProgress');
       let downloadFramesButton = document.querySelector('#downloadFrames');
-      let controlButton = document.querySelector('#control');
+      let playButton = document.querySelector('#play');
+      let pauseButton = document.querySelector('#pause');
       let speedInput = document.querySelector('#speed');
+
+      let frames = null;
+      let player = {
+        currentFrame: 0,
+        isPlaying: false,
+        isReady: false,
+        timeout: null,
+
+        initialize: function() {
+          currentFrame = 0;
+          isPlaying = false;
+          isReady = false;
+
+          playButton.disabled = true;
+          playButton.style.display = 'block';
+          pauseButton.disabled = true;
+          pauseButton.style.display = 'none';
+        },
+
+        ready: function() {
+          isReady = true;
+          playButton.disabled = false;
+        },
+
+        play: function() {
+          if (!isReady) {
+            return;
+          }
+
+          isPlaying = true;
+
+          playButton.disabled = true;
+          playButton.style.display = 'none';
+          pauseButton.disabled = false;
+          pauseButton.style.display = 'block';
+
+          player.nextFrame();
+        },
+
+        pause: function() {
+          if (!isReady) {
+            return;
+          }
+
+          isPlaying = false;
+          if (timeout != null) {
+            clearTimeout(timeout);
+            timeout = null;
+          }
+
+          pauseButton.disabled = true;
+          pauseButton.style.display = 'none';
+          playButton.disabled = false;
+          playButton.style.display = 'block';
+        },
+
+        toogle: function() {
+          if (!isPlaying) {
+            player.play();
+          } else {
+            player.pause();
+          }
+        },
+
+        nextFrame: function() {
+          if (!isPlaying) {
+            return;
+          }
+
+          if (currentFrame >= frames.totalFrames()) {
+            player.done();
+            return;
+          }
+
+          frames.getFrame(currentFrame).then(function(blob) {
+            blobToImage(blob).then(function(img) {
+              if (!isPlaying) {
+                return;
+              }
+
+              ctx.drawImage(img, 0, 0);
+
+              currentFrame++;
+              timeout = setTimeout(player.nextFrame, 1000 / (config.fps * parseFloat(speedInput.value)));
+            });
+          });
+        },
+
+        done: function() {
+          currentFrame = 0;
+          isPlaying = false;
+
+          playButton.disabled = false;
+          playButton.style.display = 'block';
+          pauseButton.disabled = true;
+          pauseButton.style.display = 'none';
+        }
+      };
 
       videoFile.addEventListener('change', extractionFileUploaded, false);
       zipFile.addEventListener('change', extractionFileUploaded, false);
-      controlButton.addEventListener('click', controlClicked, false);
+      playButton.addEventListener('click', playClicked, false);
+      pauseButton.addEventListener('click', pauseClicked, false);
       downloadFramesButton.addEventListener('click', downloadFrames, false);
+      document.body.onkeyup = function(e) {
+        if (e.keyCode == 32) {
+          e.preventDefault();
+          player.toogle();
+        }
+      }
+
+      function playClicked() {
+        player.play();
+      }
+
+      function pauseClicked() {
+        player.pause();
+      }
+
+      function downloadFrames() {
+        let zip = new JSZip();
+
+        let processed = 0;
+        let totalFrames = frames.totalFrames();
+        for (let i = 0; i < totalFrames; i++) {
+          frames.getFrame(i).then(function(blob) {
+            zip.file(i + '.jpg', blob);
+
+            processed++;
+            if (processed == totalFrames) {
+              let writeStream = streamSaver.createWriteStream('extracted-frames.zip').getWriter();
+              zip.generateInternalStream({type: 'uint8array', streamFiles: true})
+                 .on('data', data => writeStream.write(data))
+                 .on('end', () => writeStream.close())
+                 .resume();
+            }
+          });
+        }
+      }
 
       function blobToImage(blob) {
         return new Promise(function(result, _) {
@@ -120,10 +255,22 @@
         });
       }
 
+      function initializeCanvasDimensions(img) {
+        doodle.style.width = img.width + 'px';
+        doodle.style.height = img.height + 'px';
+        canvas.width = img.width;
+        canvas.height = img.height;
+      }
+
       function extractionFileUploaded() {
         if (this.files.length != 1) {
           return;
         }
+
+        videoFile.disabled = true;
+        zipFile.disabled = true;
+        downloadFramesButton.disabled = true;
+        player.initialize();
 
         let promise;
         if (this == videoFile) {
@@ -136,10 +283,7 @@
               blobToImage(lastFrameBlob).then(function(img) {
                 if (!dimensionsInitialized) {
                   dimensionsInitialized = true;
-                  doodle.style.width = img.width + 'px';
-                  doodle.style.height = img.height + 'px';
-                  canvas.width = img.width;
-                  canvas.height = img.height;
+                  initializeCanvasDimensions(img);
                 }
                 ctx.drawImage(img, 0, 0);
 
@@ -151,67 +295,27 @@
           promise = extractFramesFromZip(config, this.files[0]);
         }
 
-        promise.then(function(frames) {
-          extractionProgressElement.innerHTML = 'Extraction completed. ' + frames.totalFrames() + ' frames captured.';
-          if (frames.totalFrames() > 0) {
-            frames.getFrame(0).then(function(blob) {
+        promise.then(function(_frames) {
+          extractionProgressElement.innerHTML = 'Extraction completed. ' + _frames.totalFrames() + ' frames captured.';
+          if (_frames.totalFrames() > 0) {
+            _frames.getFrame(0).then(function(blob) {
               blobToImage(blob).then(function(img) {
-                doodle.style.width = img.width + 'px';
-                doodle.style.height = img.height + 'px';
-                canvas.width = img.width;
-                canvas.height = img.height;
+                initializeCanvasDimensions(img);
                 ctx.drawImage(img, 0, 0);
                 videoDimensionsElement.innerHTML = 'Video dimensions determined: ' + img.width + 'x' + img.height;
+
+                frames = _frames;
+                player.ready();
+
+                playButton.disabled = false;
+                downloadFramesButton.disabled = false;
               });
             });
           }
-          frames.getFrame(0).then(function(blob) { console.log('1st frame:'); console.log(blob); });
+
+          videoFile.disabled = false;
+          zipFile.disabled = false;
         });
-      }
-
-      // Garbage region
-
-      extractionStarting(null, true);
-
-      function extractionStarting(callback, isInitialization = false) {
-        if (!isInitialization) {
-          videoFile.disabled = true;
-          zipFile.disabled = true;
-        }
-
-        resetControlButton();
-        controlButton.disabled = true;
-        downloadFramesButton.disabled = true;
-      }
-
-      function extractionFoundDimensions(width, height) {
-        doodle.style.width = width + 'px';
-        doodle.style.height = height + 'px';
-        canvas.width = width;
-        canvas.height = height;
-        videoDimensionsElement.innerHTML = 'Video dimensions determined: ' + canvas.width + 'x' + canvas.height;
-
-        initOpticalFlow(width, height);
-      }
-
-      function extractionCompleted() {
-        extractionProgressElement.innerHTML = 'Extraction completed. ' + totalFrames + ' frames captured.';
-
-        if (totalFrames > 0) {
-          getFrame(0, function(blob) {
-            let img = new Image();
-            img.onload = function(e) {
-              ctx.drawImage(img, 0, 0);
-              URL.revokeObjectURL(this.src);
-            };
-            img.src = URL.createObjectURL(blob);
-          });
-        }
-
-        videoFile.disabled = false;
-        zipFile.disabled = false;
-        controlButton.disabled = false;
-        downloadFramesButton.disabled = false;
       }
 
       // Frame extraction region
@@ -297,7 +401,7 @@
 
             resolve({
               totalFrames: function() { return totalFrames; },
-              getFrame(frameNumber) {
+              getFrame: function(frameNumber) {
                 return db.getAttachment(frameNumber.toString(), attachmentName);
               }
             });
@@ -321,7 +425,7 @@
 
               resolve({
                 totalFrames: function() { return totalFrames; },
-                getFrame(frameNumber) {
+                getFrame: function(frameNumber) {
                   return new Promise(function (resolve, _) {
                     let file = zip.file(frameNumber + config.imageExtension);
                     file
@@ -335,88 +439,6 @@
               });
             });
         });
-      }
-
-      // Download frames region
-
-      function downloadFrames() {
-        let zip = new JSZip();
-
-        let processed = 0;
-        for (let i = 0; i < totalFrames; i++) {
-          getFrame(i, function(blob) {
-            zip.file(i + '.jpg', blob);
-            processed++;
-
-            if (processed == totalFrames) {
-              let writeStream = streamSaver.createWriteStream('extracted-frames.zip').getWriter();
-              zip.generateInternalStream({type: 'uint8array', streamFiles: true})
-                 .on('data', data => writeStream.write(data))
-                 .on('end', () => writeStream.close())
-                 .resume();
-            }
-          });
-        }
-      }
-
-      // Playback region
-
-      var lastFrame = 0;
-
-      document.body.onkeyup = function(e) {
-        if (e.keyCode == 32) {
-          e.preventDefault();
-          controlClicked();
-        }
-      }
-
-      function controlClicked() {
-        if (controlButton.disabled) {
-          // Can happen when the spacebar is hit
-          return;
-        }
-
-        if (controlButton.value == 'Play') {
-          controlButton.value = 'Pause';
-          nextFrame();
-        } else if (controlButton.value == 'Replay') {
-          controlButton.value = 'Pause';
-          lastFrame = 0;
-          nextFrame();
-        } else if (controlButton.value == 'Pause') {
-          controlButton.value = 'Play';
-        }
-      }
-
-      function nextFrame() {
-        if (lastFrame >= totalFrames) {
-          controlButton.value = 'Replay';
-          return;
-        }
-
-        if (controlButton.value != 'Pause') {
-          return;
-        }
-
-        getFrame(lastFrame, function(blob) {
-          var img = new Image();
-          img.onload = function(e) {
-            ctx.drawImage(img, 0, 0);
-
-            trackOpticalFlow(lastFrame);
-
-            lastFrame++;
-            setTimeout(nextFrame, 1000 / (fps * parseFloat(speedInput.value)));
-
-            URL.revokeObjectURL(this.src);
-          };
-          img.src = URL.createObjectURL(blob);
-        });
-      }
-
-      function resetControlButton() {
-        controlButton.value = 'Play';
-        lastFrame = 0;
       }
 
       // Bounding box drawing region
