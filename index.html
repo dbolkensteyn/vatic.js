@@ -415,7 +415,7 @@
             .loadAsync(file)
             .then(function(zip) {
               let totalFrames = 0;
-              for (var i = 0; ; i++) {
+              for (let i = 0; ; i++) {
                 let file = zip.file(i + config.imageExtension);
                 if (file == null) {
                   totalFrames = i;
