@@ -75,6 +75,8 @@
     <script type="text/javascript" src="dist/jsfeat.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/pouchdb/6.0.7/pouchdb.min.js"></script>
     <script type="text/javascript">
+      "use strict";
+
       let config = {
         // Should be higher than real FPS to not skip real frames
         // Hardcoded due to JS limitations
@@ -112,9 +114,9 @@
         timeout: null,
 
         initialize: function() {
-          currentFrame = 0;
-          isPlaying = false;
-          isReady = false;
+          this.currentFrame = 0;
+          this.isPlaying = false;
+          this.isReady = false;
 
           playButton.disabled = true;
           playButton.style.display = 'block';
@@ -125,34 +127,35 @@
         },
 
         ready: function() {
-          isReady = true;
+          this.isReady = true;
+
           playButton.disabled = false;
         },
 
         play: function() {
-          if (!isReady) {
+          if (!this.isReady) {
             return;
           }
 
-          isPlaying = true;
+          this.isPlaying = true;
 
           playButton.disabled = true;
           playButton.style.display = 'none';
           pauseButton.disabled = false;
           pauseButton.style.display = 'block';
 
-          player.nextFrame();
+          this.nextFrame();
         },
 
         pause: function() {
-          if (!isReady) {
+          if (!this.isReady) {
             return;
           }
 
-          isPlaying = false;
-          if (timeout != null) {
-            clearTimeout(timeout);
-            timeout = null;
+          this.isPlaying = false;
+          if (this.timeout != null) {
+            clearTimeout(this.timeout);
+            this.timeout = null;
           }
 
           pauseButton.disabled = true;
@@ -162,26 +165,26 @@
         },
 
         toogle: function() {
-          if (!isPlaying) {
-            player.play();
+          if (!this.isPlaying) {
+            this.play();
           } else {
-            player.pause();
+            this.pause();
           }
         },
 
         nextFrame: function() {
-          if (!isPlaying) {
+          if (!this.isPlaying) {
             return;
           }
 
-          if (currentFrame >= frames.totalFrames()) {
-            player.done();
+          if (this.currentFrame >= frames.totalFrames()) {
+            this.done();
             return;
           }
 
-          frames.getFrame(currentFrame).then(function(blob) {
-            blobToImage(blob).then(function(img) {
-              if (!isPlaying) {
+          frames.getFrame(this.currentFrame).then((blob) => {
+            blobToImage(blob).then((img) => {
+              if (!this.isPlaying) {
                 return;
               }
 
@@ -190,15 +193,15 @@
               let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
               opticalFlow.track(imageData);
 
-              currentFrame++;
-              timeout = setTimeout(player.nextFrame, 1000 / (config.fps * parseFloat(speedInput.value)));
+              this.currentFrame++;
+              this.timeout = setTimeout(() => this.nextFrame(), 1000 / (config.fps * parseFloat(speedInput.value)));
             });
           });
         },
 
         done: function() {
-          currentFrame = 0;
-          isPlaying = false;
+          this.currentFrame = 0;
+          this.isPlaying = false;
 
           playButton.disabled = false;
           playButton.style.display = 'block';
@@ -233,7 +236,7 @@
         let processed = 0;
         let totalFrames = frames.totalFrames();
         for (let i = 0; i < totalFrames; i++) {
-          frames.getFrame(i).then(function(blob) {
+          frames.getFrame(i).then((blob) => {
             zip.file(i + '.jpg', blob);
 
             processed++;
@@ -249,13 +252,12 @@
       }
 
       function blobToImage(blob) {
-        return new Promise(function(result, _) {
+        return new Promise((result, _) => {
           let img = new Image();
           img.onload = function() {
             result(img);
             URL.revokeObjectURL(this.src);
           };
-          img.crossOrigin = 'Anonymous';
           img.src = URL.createObjectURL(blob);
         });
       }
@@ -284,8 +286,8 @@
           promise = extractFramesFromVideo(
             config,
             this.files[0],
-            function progress(percentage, framesSoFar, lastFrameBlob) {
-              blobToImage(lastFrameBlob).then(function(img) {
+            (percentage, framesSoFar, lastFrameBlob) => {
+              blobToImage(lastFrameBlob).then((img) => {
                 if (!dimensionsInitialized) {
                   dimensionsInitialized = true;
                   initializeCanvasDimensions(img);
@@ -300,11 +302,11 @@
           promise = extractFramesFromZip(config, this.files[0]);
         }
 
-        promise.then(function(_frames) {
+        promise.then((_frames) => {
           extractionProgressElement.innerHTML = 'Extraction completed. ' + _frames.totalFrames() + ' frames captured.';
           if (_frames.totalFrames() > 0) {
-            _frames.getFrame(0).then(function(blob) {
-              blobToImage(blob).then(function(img) {
+            _frames.getFrame(0).then((blob) => {
+              blobToImage(blob).then((img) => {
                 initializeCanvasDimensions(img);
                 ctx.drawImage(img, 0, 0);
                 videoDimensionsElement.innerHTML = 'Video dimensions determined: ' + img.width + 'x' + img.height;
@@ -337,11 +339,11 @@
         let lastApproxFrame = -1;
         let attachmentName = 'img' + config.imageExtension;
 
-        return new Promise(function(_resolve, _) {
+        return new Promise((_resolve, _) => {
           resolve = _resolve;
 
           let dbName = 'vatic_js';
-          db = new PouchDB(dbName).destroy().then(function() {
+          db = new PouchDB(dbName).destroy().then(() => {
             db = new PouchDB(dbName);
 
             video.autoplay = false;
@@ -384,8 +386,8 @@
 
             ctx.drawImage(video, 0, 0);
             canvas.toBlob(
-              function(blob) {
-                db.putAttachment(frameNumber.toString(), attachmentName, blob, config.imageMimeType).then(function(doc) {
+              (blob) => {
+                db.putAttachment(frameNumber.toString(), attachmentName, blob, config.imageMimeType).then((doc) => {
                   processedFrames++;
 
                   progress(video.currentTime / video.duration, processedFrames, blob);
@@ -405,8 +407,8 @@
             video.src = '';
 
             resolve({
-              totalFrames: function() { return totalFrames; },
-              getFrame: function(frameNumber) {
+              totalFrames: () => { return totalFrames; },
+              getFrame: (frameNumber) => {
                 return db.getAttachment(frameNumber.toString(), attachmentName);
               }
             });
@@ -415,10 +417,10 @@
       }
 
       function extractFramesFromZip(config, file) {
-        return new Promise(function(resolve, _) {
+        return new Promise((resolve, _) => {
           JSZip
             .loadAsync(file)
-            .then(function(zip) {
+            .then((zip) => {
               let totalFrames = 0;
               for (let i = 0; ; i++) {
                 let file = zip.file(i + config.imageExtension);
@@ -429,13 +431,13 @@
               }
 
               resolve({
-                totalFrames: function() { return totalFrames; },
-                getFrame: function(frameNumber) {
-                  return new Promise(function (resolve, _) {
+                totalFrames: () => { return totalFrames; },
+                getFrame: (frameNumber) => {
+                  return new Promise((resolve, _) => {
                     let file = zip.file(frameNumber + config.imageExtension);
                     file
                       .async('arraybuffer')
-                      .then(function(content) {
+                      .then((content) => {
                         let blob = new Blob([ content ], {type: config.imageMimeType});
                         resolve(blob);
                       });
@@ -479,7 +481,7 @@
           }
 
           jsfeat.imgproc.grayscale(imageData.data, imageData.width, imageData.height, this.currentPyramid.data[0]);
-          this.currentPyramid.build(this.currentPyramid.data[0], skip_first_level = true);
+          this.currentPyramid.build(this.currentPyramid.data[0]);
 
           if (!this.isInitialized) {
             this.isInitialized = true;
@@ -585,7 +587,7 @@
           } else {
             mouse.startX = mouse.x;
             mouse.startY = mouse.y;
-            dom = document.createElement('div');
+            let dom = document.createElement('div');
             dom.className = 'rectangle';
             dom.style.left = mouse.x + 'px';
             dom.style.top = mouse.y + 'px';
