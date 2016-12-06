@@ -465,8 +465,9 @@
 
       let opticalFlow = {
         isInitialized: false,
-        previousPyramid: jsfeat.pyramid_t(3),
-        currentPyramid: jsfeat.pyramid_t(3),
+        previousPyramid: new jsfeat.pyramid_t(3),
+        currentPyramid: new jsfeat.pyramid_t(3),
+        foo: 42,
 
         reset: function() {
           this.isInitialized = false;
@@ -496,8 +497,8 @@
               let trackedObject = trackedObjects[i];
               for (let x = 0; x <= 10; x++) {
                 for (let y = 0; y <= 10; y++) {
-                  this.previousPoints[n++] = trackedObject.left + x * (trackedObject.width / 10);
-                  this.previousPoints[n++] = trackedObject.top + y * (trackedObject.height / 10);
+                  previousPoints[n++] = trackedObject.left + x * (trackedObject.width / 10);
+                  previousPoints[n++] = trackedObject.top + y * (trackedObject.height / 10);
                 }
               }
             }
@@ -505,13 +506,15 @@
             jsfeat.optical_flow_lk.track(this.previousPyramid, this.currentPyramid, previousPoints, currentPoints, pointsCount, 30, 30, pointsStatus, 0.01, 0.001);
 
             for (let i = 0, j = 0; i < trackedObjects.length; i++) {
+              let trackedObject = trackedObjects[i];
+
               let diffX = [];
               let diffY = [];
 
               for (; j < pointsPerObject; j++) {
                 if (pointsStatus[j] == 1) {
-                  diffX.push(this.currentPoints[j*2] - this.previousPoints[j*2]);
-                  diffY.push(this.currentPoints[j*2 + 1] - this.previousPoints[j*2 + 1]);
+                  diffX.push(currentPoints[j*2] - previousPoints[j*2]);
+                  diffY.push(currentPoints[j*2 + 1] - previousPoints[j*2 + 1]);
                 }
               }
 
