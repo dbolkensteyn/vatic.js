@@ -544,9 +544,8 @@
                 trackedObject.dom.style.left = trackedObject.left + 'px';
                 trackedObject.dom.style.top = trackedObject.top + 'px';
               } else {
-                console.log('no longer visible!');
                 trackedObject.visible = false;
-                trackedObject.dom.style.top = '-100px';
+                trackedObject.dom.style.display = "none";
               }
             }
           }
