@@ -450,7 +450,7 @@
 
       // Bounding box drawing region
 
-      class TrackedObject {
+      class LabeledObject {
         constructor(dom, left, top) {
           this.dom = dom;
           this.width = 0;
@@ -461,7 +461,7 @@
         }
       }
 
-      var trackedObjects = [];
+      var labeledObjects = [];
 
       initDraw(document.querySelector('#doodle'));
 
@@ -488,23 +488,23 @@
           } else {
             // TODO: Move all configuration to config
 
-            let visibleObjects = [];
-            for (let i = 0; i < trackedObjects.length; i++) {
-              let trackedObject = trackedObjects[i];
-              if (trackedObject.visible) {
-                visibleObjects.push(trackedObject);
+            let trackedObjects = [];
+            for (let i = 0; i < labeledObjects.length; i++) {
+              let labeledObject = labeledObjects[i];
+              if (labeledObject.visible) {
+                trackedObjects.push(labeledObject);
               }
             }
 
             let pointsPerObject = (10 + 1) * (10 + 1);
-            let pointsCount = visibleObjects.length * pointsPerObject;
+            let pointsCount = trackedObjects.length * pointsPerObject;
             let pointsStatus = new Uint8Array(pointsCount);
             let previousPoints = new Float32Array(pointsCount * 2);
             let currentPoints = new Float32Array(pointsCount * 2);
 
             pointsCount = 0;
-            for (let i = 0, n = 0; i < visibleObjects.length; i++) {
-              let trackedObject = visibleObjects[i];
+            for (let i = 0, n = 0; i < trackedObjects.length; i++) {
+              let trackedObject = trackedObjects[i];
 
               for (let x = 0; x <= 10; x++) {
                 for (let y = 0; y <= 10; y++) {
@@ -518,8 +518,8 @@
 
             jsfeat.optical_flow_lk.track(this.previousPyramid, this.currentPyramid, previousPoints, currentPoints, pointsCount, 30, 30, pointsStatus, 0.01, 0.001);
 
-            for (let i = 0; i < visibleObjects.length; i++) {
-              let trackedObject = visibleObjects[i];
+            for (let i = 0; i < trackedObjects.length; i++) {
+              let trackedObject = trackedObjects[i];
 
               let diffX = [];
               let diffY = [];
@@ -578,27 +578,27 @@
           startX: 0,
           startY: 0
         };
-        var newTrackedObject = null;
+        var newLabeledObject = null;
 
         canvas.onmousemove = function (e) {
           setMousePosition(e);
-          if (newTrackedObject !== null) {
-            newTrackedObject.width = Math.abs(mouse.x - mouse.startX);
-            newTrackedObject.height = Math.abs(mouse.y - mouse.startY);
-            newTrackedObject.left = (mouse.x - mouse.startX < 0) ? mouse.x : mouse.startX;
-            newTrackedObject.top = (mouse.y - mouse.startY < 0) ? mouse.y : mouse.startY;
+          if (newLabeledObject !== null) {
+            newLabeledObject.width = Math.abs(mouse.x - mouse.startX);
+            newLabeledObject.height = Math.abs(mouse.y - mouse.startY);
+            newLabeledObject.left = (mouse.x - mouse.startX < 0) ? mouse.x : mouse.startX;
+            newLabeledObject.top = (mouse.y - mouse.startY < 0) ? mouse.y : mouse.startY;
 
-            newTrackedObject.dom.style.width = newTrackedObject.width + 'px';
-            newTrackedObject.dom.style.height = newTrackedObject.height + 'px';
-            newTrackedObject.dom.style.left = newTrackedObject.left + 'px';
-            newTrackedObject.dom.style.top = newTrackedObject.top + 'px';
+            newLabeledObject.dom.style.width = newLabeledObject.width + 'px';
+            newLabeledObject.dom.style.height = newLabeledObject.height + 'px';
+            newLabeledObject.dom.style.left = newLabeledObject.left + 'px';
+            newLabeledObject.dom.style.top = newLabeledObject.top + 'px';
           }
         }
 
         canvas.onclick = function (e) {
-          if (newTrackedObject !== null) {
-            trackedObjects.push(newTrackedObject);
-            newTrackedObject = null;
+          if (newLabeledObject !== null) {
+            labeledObjects.push(newLabeledObject);
+            newLabeledObject = null;
             canvas.style.cursor = 'default';
           } else {
             mouse.startX = mouse.x;
@@ -608,7 +608,7 @@
             dom.style.left = mouse.x + 'px';
             dom.style.top = mouse.y + 'px';
             canvas.appendChild(dom);
-            newTrackedObject = new TrackedObject(dom, mouse.x, mouse.y);
+            newLabeledObject = new LabeledObject(dom, mouse.x, mouse.y);
             canvas.style.cursor = 'crosshair';
           }
         }
