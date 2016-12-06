@@ -489,33 +489,46 @@
             // TODO: Move all configuration to config
 
             let pointsPerObject = (10 + 1) * (10 + 1);
-            let pointsCount = trackedObjects.length * pointsPerObject;
-            let pointsStatus = new Uint8Array(pointsCount);
-            let previousPoints = new Float32Array(pointsCount * 2);
-            let currentPoints = new Float32Array(pointsCount * 2);
+            let pointsCountUpperBound = trackedObjects.length * pointsPerObject;
+            let pointsStatus = new Uint8Array(pointsCountUpperBound);
+            let previousPoints = new Float32Array(pointsCountUpperBound * 2);
+            let currentPoints = new Float32Array(pointsCountUpperBound * 2);
 
+            let pointsCount = 0;
             for (let i = 0, n = 0; i < trackedObjects.length; i++) {
               let trackedObject = trackedObjects[i];
+              if (!trackedObject.visible) {
+                continue;
+              }
+
               for (let x = 0; x <= 10; x++) {
                 for (let y = 0; y <= 10; y++) {
-                  previousPoints[n++] = trackedObject.left + x * (trackedObject.width / 10);
-                  previousPoints[n++] = trackedObject.top + y * (trackedObject.height / 10);
+                  previousPoints[pointsCount*2] = trackedObject.left + x * (trackedObject.width / 10);
+                  previousPoints[pointsCount*2 + 1] = trackedObject.top + y * (trackedObject.height / 10);
+                  pointsCount++;
                 }
               }
             }
 
             jsfeat.optical_flow_lk.track(this.previousPyramid, this.currentPyramid, previousPoints, currentPoints, pointsCount, 30, 30, pointsStatus, 0.01, 0.001);
 
-            for (let i = 0, j = 0; i < trackedObjects.length; i++) {
+            for (let i = 0; i < trackedObjects.length; i++) {
               let trackedObject = trackedObjects[i];
+              if (!trackedObject.visible) {
+                continue;
+              }
 
               let diffX = [];
               let diffY = [];
 
-              for (; j < pointsPerObject; j++) {
-                if (pointsStatus[j] == 1) {
-                  diffX.push(currentPoints[j*2] - previousPoints[j*2]);
-                  diffY.push(currentPoints[j*2 + 1] - previousPoints[j*2 + 1]);
+              for (let j = 0; j < pointsPerObject; j++) {
+                let p = i*pointsPerObject + j;
+                if (pointsStatus[p] == 1) {
+                  let x = p * 2;
+                  let y = x + 1;
+
+                  diffX.push(currentPoints[x] - previousPoints[x]);
+                  diffY.push(currentPoints[y] - previousPoints[y]);
                 }
               }
 
