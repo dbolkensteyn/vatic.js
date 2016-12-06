@@ -488,18 +488,23 @@
           } else {
             // TODO: Move all configuration to config
 
-            let pointsPerObject = (10 + 1) * (10 + 1);
-            let pointsCountUpperBound = trackedObjects.length * pointsPerObject;
-            let pointsStatus = new Uint8Array(pointsCountUpperBound);
-            let previousPoints = new Float32Array(pointsCountUpperBound * 2);
-            let currentPoints = new Float32Array(pointsCountUpperBound * 2);
-
-            let pointsCount = 0;
-            for (let i = 0, n = 0; i < trackedObjects.length; i++) {
+            let visibleObjects = [];
+            for (let i = 0; i < trackedObjects.length; i++) {
               let trackedObject = trackedObjects[i];
-              if (!trackedObject.visible) {
-                continue;
+              if (trackedObject.visible) {
+                visibleObjects.push(trackedObject);
               }
+            }
+
+            let pointsPerObject = (10 + 1) * (10 + 1);
+            let pointsCount = visibleObjects.length * pointsPerObject;
+            let pointsStatus = new Uint8Array(pointsCount);
+            let previousPoints = new Float32Array(pointsCount * 2);
+            let currentPoints = new Float32Array(pointsCount * 2);
+
+            pointsCount = 0;
+            for (let i = 0, n = 0; i < visibleObjects.length; i++) {
+              let trackedObject = visibleObjects[i];
 
               for (let x = 0; x <= 10; x++) {
                 for (let y = 0; y <= 10; y++) {
@@ -509,14 +514,12 @@
                 }
               }
             }
+            console.assert(pointsCount == pointsStatus.length, "Inconsistent number of points");
 
             jsfeat.optical_flow_lk.track(this.previousPyramid, this.currentPyramid, previousPoints, currentPoints, pointsCount, 30, 30, pointsStatus, 0.01, 0.001);
 
-            for (let i = 0; i < trackedObjects.length; i++) {
-              let trackedObject = trackedObjects[i];
-              if (!trackedObject.visible) {
-                continue;
-              }
+            for (let i = 0; i < visibleObjects.length; i++) {
+              let trackedObject = visibleObjects[i];
 
               let diffX = [];
               let diffY = [];
