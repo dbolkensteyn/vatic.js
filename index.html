@@ -122,8 +122,6 @@
           playButton.style.display = 'block';
           pauseButton.disabled = true;
           pauseButton.style.display = 'none';
-
-          opticalFlow.reset();
         },
 
         ready: function() {
@@ -191,7 +189,7 @@
               ctx.drawImage(img, 0, 0);
 
               let imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-              opticalFlow.track(imageData);
+              // TODO optical flow!
 
               this.currentFrame++;
               this.timeout = setTimeout(() => this.nextFrame(), 1000 / (config.fps * parseFloat(speedInput.value)));
@@ -448,118 +446,183 @@
         });
       }
 
-      // Bounding box drawing region
-
-      class LabeledObject {
-        constructor(dom, left, top) {
-          this.dom = dom;
-          this.width = 0;
-          this.height = 0;
-          this.left = left;
-          this.top = top;
-          this.visible = true;
-        }
-      }
-
-      var labeledObjects = [];
-
-      initDraw(document.querySelector('#doodle'));
+      // Optical flow tracking region
 
       let opticalFlow = {
         isInitialized: false,
         previousPyramid: new jsfeat.pyramid_t(3),
         currentPyramid: new jsfeat.pyramid_t(3),
 
+        init: function(imageData) {
+          this.previousPyramid.allocate(imageData.width, imageData.height, jsfeat.U8_t | jsfeat.C1_t);
+          this.currentPyramid.allocate(imageData.width, imageData.height, jsfeat.U8_t | jsfeat.C1_t);
+          jsfeat.imgproc.grayscale(imageData.data, imageData.width, imageData.height, this.previousPyramid.data[0]);
+          this.previousPyramid.build(this.previousPyramid.data[0]);
+          this.isInitialized = true;
+        },
+
         reset: function() {
           this.isInitialized = false;
         },
 
-        track: function(imageData) {
+        track: function(imageData, bboxes) {
           if (!this.isInitialized) {
-            this.previousPyramid.allocate(imageData.width, imageData.height, jsfeat.U8_t | jsfeat.C1_t);
-            this.currentPyramid.allocate(imageData.width, imageData.height, jsfeat.U8_t | jsfeat.C1_t);
+            throw 'not initialized';
           }
 
           jsfeat.imgproc.grayscale(imageData.data, imageData.width, imageData.height, this.currentPyramid.data[0]);
           this.currentPyramid.build(this.currentPyramid.data[0]);
 
-          if (!this.isInitialized) {
-            this.isInitialized = true;
-          } else {
-            // TODO: Move all configuration to config
+          // TODO: Move all configuration to config
 
-            let trackedObjects = [];
-            for (let i = 0; i < labeledObjects.length; i++) {
-              let labeledObject = labeledObjects[i];
-              if (labeledObject.visible) {
-                trackedObjects.push(labeledObject);
+          let pointsPerObject = (10 + 1) * (10 + 1);
+          let pointsCount = bboxes.length * pointsPerObject;
+          let pointsStatus = new Uint8Array(pointsCount);
+          let previousPoints = new Float32Array(pointsCount * 2);
+          let currentPoints = new Float32Array(pointsCount * 2);
+
+          pointsCount = 0;
+          for (let i = 0, n = 0; i < bboxes.length; i++) {
+            let bbox = bboxes[i];
+
+            for (let x = 0; x <= 10; x++) {
+              for (let y = 0; y <= 10; y++) {
+                previousPoints[pointsCount*2] = bbox.x + x * (bbox.width / 10);
+                previousPoints[pointsCount*2 + 1] = bbox.y + y * (bbox.height / 10);
+                pointsCount++;
+              }
+            }
+          }
+          console.assert(pointsCount == pointsStatus.length, 'Inconsistent number of points');
+
+          jsfeat.optical_flow_lk.track(this.previousPyramid, this.currentPyramid, previousPoints, currentPoints, pointsCount, 30, 30, pointsStatus, 0.01, 0.001);
+
+          let newBboxes = [];
+          let p = 0;
+          for (let i = 0; i < bboxes.length; i++) {
+            let bbox = bboxes[i];
+
+            let diffX = [];
+            let diffY = [];
+
+            for (let j = 0; j < pointsPerObject; j++, p++) {
+              if (pointsStatus[p] == 1) {
+                let x = p * 2;
+                let y = x + 1;
+
+                diffX.push(currentPoints[x] - previousPoints[x]);
+                diffY.push(currentPoints[y] - previousPoints[y]);
               }
             }
 
-            let pointsPerObject = (10 + 1) * (10 + 1);
-            let pointsCount = trackedObjects.length * pointsPerObject;
-            let pointsStatus = new Uint8Array(pointsCount);
-            let previousPoints = new Float32Array(pointsCount * 2);
-            let currentPoints = new Float32Array(pointsCount * 2);
+            // TODO: Also compute new width and height
 
-            pointsCount = 0;
-            for (let i = 0, n = 0; i < trackedObjects.length; i++) {
-              let trackedObject = trackedObjects[i];
-
-              for (let x = 0; x <= 10; x++) {
-                for (let y = 0; y <= 10; y++) {
-                  previousPoints[pointsCount*2] = trackedObject.left + x * (trackedObject.width / 10);
-                  previousPoints[pointsCount*2 + 1] = trackedObject.top + y * (trackedObject.height / 10);
-                  pointsCount++;
-                }
-              }
+            newBbox = null;
+            if (diffX.length > 0) {
+              let medianX = jsfeat.math.median(diffX, 0, diffX.length - 1);
+              let medianY = jsfeat.math.median(diffY, 0, diffY.length - 1);
+              newBbox = new BoundingBox(bbox.x + Math.round(medianX), bbox.y + Math.round(medianY), bbox.width, bbox.height);
             }
-            console.assert(pointsCount == pointsStatus.length, "Inconsistent number of points");
-
-            jsfeat.optical_flow_lk.track(this.previousPyramid, this.currentPyramid, previousPoints, currentPoints, pointsCount, 30, 30, pointsStatus, 0.01, 0.001);
-
-            for (let i = 0; i < trackedObjects.length; i++) {
-              let trackedObject = trackedObjects[i];
-
-              let diffX = [];
-              let diffY = [];
-
-              for (let j = 0; j < pointsPerObject; j++) {
-                let p = i*pointsPerObject + j;
-                if (pointsStatus[p] == 1) {
-                  let x = p * 2;
-                  let y = x + 1;
-
-                  diffX.push(currentPoints[x] - previousPoints[x]);
-                  diffY.push(currentPoints[y] - previousPoints[y]);
-                }
-              }
-
-              if (diffX.length > 0) {
-                let medianX = jsfeat.math.median(diffX, 0, diffX.length - 1);
-                let medianY = jsfeat.math.median(diffY, 0, diffY.length - 1);
-
-                trackedObject.left += Math.round(medianX);
-                trackedObject.top += Math.round(medianY);
-                trackedObject.dom.style.left = trackedObject.left + 'px';
-                trackedObject.dom.style.top = trackedObject.top + 'px';
-              } else {
-                trackedObject.visible = false;
-                trackedObject.dom.style.display = "none";
-              }
-            }
+            newBboxes.push(newBbox);
           }
 
           // Swap current and previous pyramids
           let oldPyramid = this.previousPyramid;
           this.previousPyramid = this.currentPyramid;
           this.currentPyramid = oldPyramid; // Buffer re-use
+
+          return newBboxes;
         }
       };
 
+      // Bounding box drawing region
+
+      /**
+       * Represents the coordinates of a bounding box
+       */
+      class BoundingBox {
+        constructor(x, y, width, height) {
+          this.x = x;
+          this.y = y;
+          this.width = width;
+          this.height = height;
+        }
+      }
+
+      /**
+       * Represents a bounding box at a particular frame.
+       */
+      class AnnotatedFrame {
+        /** Constructs a new visible bounding box at a specified frame */
+        constructor(frameNumber, bbox, isGroundTruth) {
+          this.frameNumber = frameNumber;
+          this.bbox = bbox;
+          this.isGroundTruth = isGroundTruth;
+          this.isVisible = true;
+        }
+      }
+
+      /**
+       * Represents an object bounding boxes throughout the entire frame sequence.
+       */
+      class AnnotatedObject {
+        constructor(dom) {
+          this.dom = dom;
+          this.frames = [];
+        }
+
+        add(frame) {
+          for (let i = 0; i < this.frames.length; i++) {
+            if (this.frames[i].frameNumber == frame.frameNumber) {
+              this.frames[i] = frame;
+              removeFramesToBeRecomputedFrom(i + 1);
+              return;
+            } else if (this.frames[i].frameNumber > frame.frameNumber) {
+              this.frames.splice(i, 0, frame);
+              removeFramesToBeRecomputedFrom(i + 1);
+              return;
+            }
+          }
+
+          this.frames.push(frame);
+        }
+
+        get(frameNumber) {
+          for (let i = 0; i < this.frames.length; i++) {
+            let currentFrame = this.frames[i];
+            if (currentFrame.frameNumber > frameNumber) {
+              break;
+            }
+
+            if (currentFrame.frameNumber == frameNumber) {
+              return currentFrame;
+            }
+          }
+
+          return null;
+        }
+
+        removeFramesToBeRecomputedFrom(frameNumber) {
+          let count = 0;
+          for (let i = frameNumber; i < this.frames.length; i++) {
+            if (this.frames[i].isGroundTruth) {
+              break;
+            }
+            count++;
+          }
+          if (count > 0) {
+            this.frames.splice(frameNumber, count);
+          }
+        }
+      }
+
+      let annotatedObjects = [];
+
+      initDraw(document.querySelector('#doodle'));
+
       function initDraw(canvas) {
         function setMousePosition(e) {
-          var ev = e || window.event;
+          let ev = e || window.event;
           if (ev.pageX) {
             mouse.x = ev.pageX;
             mouse.y = ev.pageY;
@@ -571,43 +634,50 @@
           mouse.y -= canvas.offsetTop;
         }
 
-        var mouse = {
+        let mouse = {
           x: 0,
           y: 0,
           startX: 0,
           startY: 0
         };
-        var newLabeledObject = null;
+
+        let tmpAnnotatedObject = null;
 
         canvas.onmousemove = function (e) {
           setMousePosition(e);
-          if (newLabeledObject !== null) {
-            newLabeledObject.width = Math.abs(mouse.x - mouse.startX);
-            newLabeledObject.height = Math.abs(mouse.y - mouse.startY);
-            newLabeledObject.left = (mouse.x - mouse.startX < 0) ? mouse.x : mouse.startX;
-            newLabeledObject.top = (mouse.y - mouse.startY < 0) ? mouse.y : mouse.startY;
+          if (tmpAnnotatedObject !== null) {
+            tmpAnnotatedObject.width = Math.abs(mouse.x - mouse.startX);
+            tmpAnnotatedObject.height = Math.abs(mouse.y - mouse.startY);
+            tmpAnnotatedObject.x = (mouse.x - mouse.startX < 0) ? mouse.x : mouse.startX;
+            tmpAnnotatedObject.y = (mouse.y - mouse.startY < 0) ? mouse.y : mouse.startY;
 
-            newLabeledObject.dom.style.width = newLabeledObject.width + 'px';
-            newLabeledObject.dom.style.height = newLabeledObject.height + 'px';
-            newLabeledObject.dom.style.left = newLabeledObject.left + 'px';
-            newLabeledObject.dom.style.top = newLabeledObject.top + 'px';
+            tmpAnnotatedObject.dom.style.width = tmpAnnotatedObject.width + 'px';
+            tmpAnnotatedObject.dom.style.height = tmpAnnotatedObject.height + 'px';
+            tmpAnnotatedObject.dom.style.left = tmpAnnotatedObject.x + 'px';
+            tmpAnnotatedObject.dom.style.top = tmpAnnotatedObject.y + 'px';
           }
         }
 
         canvas.onclick = function (e) {
-          if (newLabeledObject !== null) {
-            labeledObjects.push(newLabeledObject);
-            newLabeledObject = null;
+          if (tmpAnnotatedObject != null) {
+            let annotatedObject = new AnnotatedObject(tmpAnnotatedObject.dom);
+            let bbox = new BoundingBox(tmpAnnotatedObject.x, tmpAnnotatedObject.y, tmpAnnotatedObject.width, tmpAnnotatedObject.height);
+            annotatedObject.add(new AnnotatedFrame(player.currentFrame, bbox, true));
+            annotatedObjects.push(annotatedObject);
+            tmpAnnotatedObject = null;
+
             canvas.style.cursor = 'default';
           } else {
             mouse.startX = mouse.x;
             mouse.startY = mouse.y;
+
             let dom = document.createElement('div');
             dom.className = 'rectangle';
             dom.style.left = mouse.x + 'px';
             dom.style.top = mouse.y + 'px';
             canvas.appendChild(dom);
-            newLabeledObject = new LabeledObject(dom, mouse.x, mouse.y);
+            tmpAnnotatedObject = { dom: dom };
+
             canvas.style.cursor = 'crosshair';
           }
         }
