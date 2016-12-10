@@ -555,6 +555,10 @@
           this.bbox = bbox;
           this.isGroundTruth = isGroundTruth;
         }
+
+        isVisible() {
+          return this.bbox != null;
+        }
       }
 
       /**
@@ -570,15 +574,18 @@
           for (let i = 0; i < this.frames.length; i++) {
             if (this.frames[i].frameNumber == frame.frameNumber) {
               this.frames[i] = frame;
-              removeFramesToBeRecomputedFrom(i + 1);
+              this.removeFramesToBeRecomputedFrom(i + 1);
               return;
             } else if (this.frames[i].frameNumber > frame.frameNumber) {
               this.frames.splice(i, 0, frame);
-              removeFramesToBeRecomputedFrom(i + 1);
+              this.removeFramesToBeRecomputedFrom(i + 1);
               return;
             }
           }
 
+          if (this.frames.length == 0) {
+            this.injectInvisibleFramesBefore(frame.frameNumber);
+          }
           this.frames.push(frame);
         }
 
@@ -607,6 +614,12 @@
           }
           if (count > 0) {
             this.frames.splice(frameNumber, count);
+          }
+        }
+
+        injectInvisibleFramesBefore(frameNumber) {
+          for (let i = 0; i < frameNumber; i++) {
+            this.frames.push(new AnnotatedFrame(i, null, false));
           }
         }
       }
@@ -699,21 +712,23 @@
           return new Promise((resolve, _) => {
             this.frames.getFrame(frameNumber).then((blob) => {
               blobToImage(blob).then((img) => {
-                let bboxes = [];
+                let trackedObjectsBboxes = [];
                 for (let i = 0; i < this.annotatedObjects.length; i++) {
                   let annotatedObject = this.annotatedObjects[i];
                   let annotatedFrame = annotatedObject.get(frameNumber - 1);
                   if (annotatedFrame == null) {
                     throw 'missing frame';
                   }
-                  bboxes.push(annotatedFrame.bbox);
+                  if (annotatedFrame.bbox != null) {
+                    trackedObjectsBboxes.push({annotatedObject: annotatedObject, bbox: annotatedFrame.bbox});
+                  }
                 }
 
                 let imageData = this.imageData(img);
-                let newBboxes = this.opticalFlow.track(imageData, bboxes);
+                let newBboxes = this.opticalFlow.track(imageData, trackedObjectsBboxes.map(t => t.bbox));
 
-                for (let i = 0; i < this.annotatedObjects.length; i++) {
-                  let annotatedObject = this.annotatedObjects[i];
+                for (let i = 0; i < trackedObjectsBboxes.length; i++) {
+                  let annotatedObject = trackedObjectsBboxes[i].annotatedObject;
                   let annotatedFrame = annotatedObject.get(frameNumber);
                   if (annotatedFrame == null) {
                     annotatedFrame = new AnnotatedFrame(frameNumber, newBboxes[i], false);
@@ -721,10 +736,15 @@
                   }
                   
                   // TODO: Move to player
-                  annotatedObject.dom.style.width = annotatedFrame.bbox.width + 'px';
-                  annotatedObject.dom.style.height = annotatedFrame.bbox.height + 'px';
-                  annotatedObject.dom.style.left = annotatedFrame.bbox.x + 'px';
-                  annotatedObject.dom.style.top = annotatedFrame.bbox.y + 'px';
+                  if (annotatedFrame.isVisible()) {
+                    annotatedObject.dom.style.display = 'block';
+                    annotatedObject.dom.style.width = annotatedFrame.bbox.width + 'px';
+                    annotatedObject.dom.style.height = annotatedFrame.bbox.height + 'px';
+                    annotatedObject.dom.style.left = annotatedFrame.bbox.x + 'px';
+                    annotatedObject.dom.style.top = annotatedFrame.bbox.y + 'px';
+                  } else {
+                    annotatedObject.dom.style.display = 'none';
+                  }
                 }
 
                 this.lastFrame = frameNumber;
