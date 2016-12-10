@@ -473,24 +473,24 @@
           // TODO: Move all configuration to config
 
           let pointsPerObject = (10 + 1) * (10 + 1);
-          let pointsCount = bboxes.length * pointsPerObject;
-          let pointsStatus = new Uint8Array(pointsCount);
-          let previousPoints = new Float32Array(pointsCount * 2);
-          let currentPoints = new Float32Array(pointsCount * 2);
+          let pointsCountUpperBound = bboxes.length * pointsPerObject;
+          let pointsStatus = new Uint8Array(pointsCountUpperBound);
+          let previousPoints = new Float32Array(pointsCountUpperBound * 2);
+          let currentPoints = new Float32Array(pointsCountUpperBound * 2);
 
-          pointsCount = 0;
+          let pointsCount = 0;
           for (let i = 0, n = 0; i < bboxes.length; i++) {
             let bbox = bboxes[i];
-
-            for (let x = 0; x <= 10; x++) {
-              for (let y = 0; y <= 10; y++) {
-                previousPoints[pointsCount*2] = bbox.x + x * (bbox.width / 10);
-                previousPoints[pointsCount*2 + 1] = bbox.y + y * (bbox.height / 10);
-                pointsCount++;
+            if (bbox != null) {
+              for (let x = 0; x <= 10; x++) {
+                for (let y = 0; y <= 10; y++) {
+                  previousPoints[pointsCount*2] = bbox.x + x * (bbox.width / 10);
+                  previousPoints[pointsCount*2 + 1] = bbox.y + y * (bbox.height / 10);
+                  pointsCount++;
+                }
               }
             }
           }
-          console.assert(pointsCount == pointsStatus.length, 'inconsistent number of points');
 
           jsfeat.optical_flow_lk.track(this.previousPyramid, this.currentPyramid, previousPoints, currentPoints, pointsCount, 30, 30, pointsStatus, 0.01, 0.001);
 
@@ -498,28 +498,31 @@
           let p = 0;
           for (let i = 0; i < bboxes.length; i++) {
             let bbox = bboxes[i];
+            let newBbox = null;
 
-            let diffX = [];
-            let diffY = [];
+            if (bbox != null) {
+              let diffX = [];
+              let diffY = [];
 
-            for (let j = 0; j < pointsPerObject; j++, p++) {
-              if (pointsStatus[p] == 1) {
-                let x = p * 2;
-                let y = x + 1;
+              for (let j = 0; j < pointsPerObject; j++, p++) {
+                if (pointsStatus[p] == 1) {
+                  let x = p * 2;
+                  let y = x + 1;
 
-                diffX.push(currentPoints[x] - previousPoints[x]);
-                diffY.push(currentPoints[y] - previousPoints[y]);
+                  diffX.push(currentPoints[x] - previousPoints[x]);
+                  diffY.push(currentPoints[y] - previousPoints[y]);
+                }
+              }
+
+              // TODO: Also compute new width and height
+
+              if (diffX.length > 0) {
+                let medianX = jsfeat.math.median(diffX, 0, diffX.length - 1);
+                let medianY = jsfeat.math.median(diffY, 0, diffY.length - 1);
+                newBbox = new BoundingBox(bbox.x + Math.round(medianX), bbox.y + Math.round(medianY), bbox.width, bbox.height);
               }
             }
 
-            // TODO: Also compute new width and height
-
-            let newBbox = null;
-            if (diffX.length > 0) {
-              let medianX = jsfeat.math.median(diffX, 0, diffX.length - 1);
-              let medianY = jsfeat.math.median(diffY, 0, diffY.length - 1);
-              newBbox = new BoundingBox(bbox.x + Math.round(medianX), bbox.y + Math.round(medianY), bbox.width, bbox.height);
-            }
             newBboxes.push(newBbox);
           }
 
@@ -712,23 +715,21 @@
           return new Promise((resolve, _) => {
             this.frames.getFrame(frameNumber).then((blob) => {
               blobToImage(blob).then((img) => {
-                let trackedObjectsBboxes = [];
+                let bboxes = [];
                 for (let i = 0; i < this.annotatedObjects.length; i++) {
                   let annotatedObject = this.annotatedObjects[i];
                   let annotatedFrame = annotatedObject.get(frameNumber - 1);
                   if (annotatedFrame == null) {
                     throw 'missing frame';
                   }
-                  if (annotatedFrame.bbox != null) {
-                    trackedObjectsBboxes.push({annotatedObject: annotatedObject, bbox: annotatedFrame.bbox});
-                  }
+                  bboxes.push(annotatedFrame.bbox);
                 }
 
                 let imageData = this.imageData(img);
-                let newBboxes = this.opticalFlow.track(imageData, trackedObjectsBboxes.map(t => t.bbox));
+                let newBboxes = this.opticalFlow.track(imageData, bboxes);
 
-                for (let i = 0; i < trackedObjectsBboxes.length; i++) {
-                  let annotatedObject = trackedObjectsBboxes[i].annotatedObject;
+                for (let i = 0; i < this.annotatedObjects.length; i++) {
+                  let annotatedObject = this.annotatedObjects[i];
                   let annotatedFrame = annotatedObject.get(frameNumber);
                   if (annotatedFrame == null) {
                     annotatedFrame = new AnnotatedFrame(frameNumber, newBboxes[i], false);
