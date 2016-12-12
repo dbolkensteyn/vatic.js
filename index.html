@@ -639,51 +639,20 @@
 
         getFrameWithObjects: function(frameNumber) {
           return new Promise((resolve, _) => {
-            let startFrame = this.startFrame(frameNumber);
-            if (this.annotatedObjects.length == 0 || startFrame == frameNumber) {
-              // TODO Return frame with existing annotations
-              this.frames.getFrame(frameNumber).then((blob) => {
-                blobToImage(blob).then((img) => {
+            let i = this.startFrame(frameNumber);
+
+            let trackNextFrame = () => {
+              this.track(i).then((img) => {
+                if (i == frameNumber) {
                   resolve(img);
-                });
+                } else {
+                  i++;
+                  trackNextFrame();
+                }
               });
-              return;
-            }
+            };
 
-            this.initOpticalFlow(startFrame).then(() => {
-              let i = startFrame + 1;
-
-              let trackNext = () => {
-                this.track(i).then((img) => {
-                  if (i == frameNumber) {
-                    resolve(img);
-                  } else {
-                    i++;
-                    trackNext();
-                  }
-                });
-              };
-
-              trackNext();
-            });
-          });
-        },
-
-        initOpticalFlow: function(frameNumber) {
-          return new Promise((resolve, _) => {
-            if (this.lastFrame != -1 && this.lastFrame + 1 == frameNumber) {
-              resolve();
-            } else {
-              this.opticalFlow.reset();
-              this.frames.getFrame(frameNumber).then((blob) => {
-                blobToImage(blob).then((img) => {
-                  let imageData = this.imageData(img);
-                  this.opticalFlow.init(imageData);
-                  this.lastFrame = frameNumber;
-                  resolve();
-                });
-              });
-            }
+            trackNextFrame();
           });
         },
 
@@ -708,50 +677,84 @@
         },
 
         track: function(frameNumber) {
-          if (this.lastFrame + 1 != frameNumber) {
-            throw 'do not call this private method directly';
-          }
-
           return new Promise((resolve, _) => {
             this.frames.getFrame(frameNumber).then((blob) => {
               blobToImage(blob).then((img) => {
-                let bboxes = [];
-                for (let i = 0; i < this.annotatedObjects.length; i++) {
-                  let annotatedObject = this.annotatedObjects[i];
-                  let annotatedFrame = annotatedObject.get(frameNumber - 1);
-                  if (annotatedFrame == null) {
-                    throw 'missing frame';
-                  }
-                  bboxes.push(annotatedFrame.bbox);
-                }
-
-                let imageData = this.imageData(img);
-                let newBboxes = this.opticalFlow.track(imageData, bboxes);
-
+                let toCompute = [];
                 for (let i = 0; i < this.annotatedObjects.length; i++) {
                   let annotatedObject = this.annotatedObjects[i];
                   let annotatedFrame = annotatedObject.get(frameNumber);
                   if (annotatedFrame == null) {
-                    annotatedFrame = new AnnotatedFrame(frameNumber, newBboxes[i], false);
-                    annotatedObject.add(annotatedFrame);
-                  }
-                  
-                  // TODO: Move to player
-                  if (annotatedFrame.isVisible()) {
-                    annotatedObject.dom.style.display = 'block';
-                    annotatedObject.dom.style.width = annotatedFrame.bbox.width + 'px';
-                    annotatedObject.dom.style.height = annotatedFrame.bbox.height + 'px';
-                    annotatedObject.dom.style.left = annotatedFrame.bbox.x + 'px';
-                    annotatedObject.dom.style.top = annotatedFrame.bbox.y + 'px';
-                  } else {
-                    annotatedObject.dom.style.display = 'none';
+                    annotatedFrame = annotatedObject.get(frameNumber - 1);
+                    if (annotatedFrame == null) {
+                      throw 'tracking must be done sequentially';
+                    }
+                    toCompute.push({annotatedObject: annotatedObject, bbox: annotatedFrame.bbox});
                   }
                 }
 
-                this.lastFrame = frameNumber;
-                resolve(img);
+                let bboxes = toCompute.map(c => c.bbox);
+                let hasAnyBbox = bboxes.some(bbox => bbox != null);
+                let optionalOpticalFlowInit;
+                if (hasAnyBbox) {
+                  optionalOpticalFlowInit = this.initOpticalFlow(frameNumber - 1);
+                } else {
+                  optionalOpticalFlowInit = new Promise((r, _) => { r(); });
+                }
+
+                optionalOpticalFlowInit.then(() => {
+                  let newBboxes;
+                  if (hasAnyBbox) {
+                    let imageData = this.imageData(img);
+                    newBboxes = this.opticalFlow.track(imageData, bboxes);
+                    this.lastFrame = frameNumber;
+                  } else {
+                    newBboxes = bboxes;
+                  }
+
+                  for (let i = 0; i < toCompute.length; i++) {
+                    let annotatedObject = toCompute[i].annotatedObject;
+                    let annotatedFrame = new AnnotatedFrame(frameNumber, newBboxes[i], false);
+                    annotatedObject.add(annotatedFrame);
+                  }
+
+                  // TODO Move to player!
+                  for (let i = 0; i < this.annotatedObjects.length; i++) {
+                    let annotatedObject = this.annotatedObjects[i];
+                    let annotatedFrame = annotatedObject.get(frameNumber);
+                    if (annotatedFrame.isVisible()) {
+                      annotatedObject.dom.style.display = 'block';
+                      annotatedObject.dom.style.width = annotatedFrame.bbox.width + 'px';
+                      annotatedObject.dom.style.height = annotatedFrame.bbox.height + 'px';
+                      annotatedObject.dom.style.left = annotatedFrame.bbox.x + 'px';
+                      annotatedObject.dom.style.top = annotatedFrame.bbox.y + 'px';
+                    } else {
+                      annotatedObject.dom.style.display = 'none';
+                    }
+                  }
+
+                  resolve(img);
+                });
               });
             });
+          });
+        },
+
+        initOpticalFlow: function(frameNumber) {
+          return new Promise((resolve, _) => {
+            if (this.lastFrame != -1 && this.lastFrame == frameNumber) {
+              resolve();
+            } else {
+              this.opticalFlow.reset();
+              this.frames.getFrame(frameNumber).then((blob) => {
+                blobToImage(blob).then((img) => {
+                  let imageData = this.imageData(img);
+                  this.opticalFlow.init(imageData);
+                  this.lastFrame = frameNumber;
+                  resolve();
+                });
+              });
+            }
           });
         },
 
