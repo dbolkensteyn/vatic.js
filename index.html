@@ -586,6 +586,15 @@
       let framesManager = new FramesManager();
       let annotatedObjectsTracker = new AnnotatedObjectsTracker(framesManager);
 
+      framesManager.onReset.push(() => {
+        for (let i = 0; i < doodle.childNodes.length; i++) {
+          let child = doodle.childNodes[i];
+          if (child.className == 'rectangle') {
+            doodle.removeChild(child);
+          }
+        }
+      });
+
       let player = {
         currentFrame: 0,
         isPlaying: false,
