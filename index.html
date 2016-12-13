@@ -376,8 +376,7 @@
        * Represents an object bounding boxes throughout the entire frame sequence.
        */
       class AnnotatedObject {
-        constructor(dom) {
-          this.dom = dom;
+        constructor() {
           this.frames = [];
         }
 
@@ -389,18 +388,14 @@
               return;
             } else if (this.frames[i].frameNumber > frame.frameNumber) {
               this.frames.splice(i, 0, frame);
-              if (i == 0) {
-                this.injectInvisibleFrameAtOrigin();
-              }
               this.removeFramesToBeRecomputedFrom(i + 1);
+              this.injectInvisibleFrameAtOrigin();
               return;
             }
           }
 
-          if (this.frames.length == 0) {
-            this.injectInvisibleFrameAtOrigin();
-          }
           this.frames.push(frame);
+          this.injectInvisibleFrameAtOrigin();
         }
 
         get(frameNumber) {
@@ -432,7 +427,9 @@
         }
 
         injectInvisibleFrameAtOrigin() {
-          this.frames.splice(0, 0, new AnnotatedFrame(0, null, false));
+          if (this.frames.length == 0 || this.frames[0].frameNumber > 0) {
+            this.frames.splice(0, 0, new AnnotatedFrame(0, null, false));
+          }
         }
       }
 
@@ -458,9 +455,9 @@
             let i = this.startFrame(frameNumber);
 
             let trackNextFrame = () => {
-              this.track(i).then((img) => {
+              this.track(i).then((frameWithObjects) => {
                 if (i == frameNumber) {
-                  resolve(img);
+                  resolve(frameWithObjects);
                 } else {
                   i++;
                   trackNextFrame();
@@ -496,6 +493,7 @@
           return new Promise((resolve, _) => {
             this.framesManager.frames.getFrame(frameNumber).then((blob) => {
               blobToImage(blob).then((img) => {
+                let result = [];
                 let toCompute = [];
                 for (let i = 0; i < this.annotatedObjects.length; i++) {
                   let annotatedObject = this.annotatedObjects[i];
@@ -506,6 +504,8 @@
                       throw 'tracking must be done sequentially';
                     }
                     toCompute.push({annotatedObject: annotatedObject, bbox: annotatedFrame.bbox});
+                  } else {
+                    result.push({annotatedObject: annotatedObject, annotatedFrame: annotatedFrame});
                   }
                 }
 
@@ -532,24 +532,10 @@
                     let annotatedObject = toCompute[i].annotatedObject;
                     let annotatedFrame = new AnnotatedFrame(frameNumber, newBboxes[i], false);
                     annotatedObject.add(annotatedFrame);
+                    result.push({annotatedObject: annotatedObject, annotatedFrame: annotatedFrame});
                   }
 
-                  // TODO Move to player!
-                  for (let i = 0; i < this.annotatedObjects.length; i++) {
-                    let annotatedObject = this.annotatedObjects[i];
-                    let annotatedFrame = annotatedObject.get(frameNumber);
-                    if (annotatedFrame.isVisible()) {
-                      annotatedObject.dom.style.display = 'block';
-                      annotatedObject.dom.style.width = annotatedFrame.bbox.width + 'px';
-                      annotatedObject.dom.style.height = annotatedFrame.bbox.height + 'px';
-                      annotatedObject.dom.style.left = annotatedFrame.bbox.x + 'px';
-                      annotatedObject.dom.style.top = annotatedFrame.bbox.y + 'px';
-                    } else {
-                      annotatedObject.dom.style.display = 'none';
-                    }
-                  }
-
-                  resolve(img);
+                  resolve({img: img, objects: result});
                 });
               });
             });
@@ -673,12 +659,27 @@
             return;
           }
 
-          annotatedObjectsTracker.getFrameWithObjects(this.currentFrame).then((img) => {
+          annotatedObjectsTracker.getFrameWithObjects(this.currentFrame).then((frameWithObjects) => {
             if (!this.isPlaying) {
               return;
             }
 
-            ctx.drawImage(img, 0, 0);
+            ctx.drawImage(frameWithObjects.img, 0, 0);
+
+            for (let i = 0; i < frameWithObjects.objects.length; i++) {
+              let object = frameWithObjects.objects[i];
+              let annotatedObject = object.annotatedObject;
+              let annotatedFrame = object.annotatedFrame;
+              if (annotatedFrame.isVisible()) {
+                annotatedObject.dom.style.display = 'block';
+                annotatedObject.dom.style.width = annotatedFrame.bbox.width + 'px';
+                annotatedObject.dom.style.height = annotatedFrame.bbox.height + 'px';
+                annotatedObject.dom.style.left = annotatedFrame.bbox.x + 'px';
+                annotatedObject.dom.style.top = annotatedFrame.bbox.y + 'px';
+              } else {
+                annotatedObject.dom.style.display = 'none';
+              }
+            }
 
             this.currentFrame++;
             this.timeout = setTimeout(() => this.nextFrame(), 1000 / (config.fps * parseFloat(speedInput.value)));
@@ -842,7 +843,8 @@
 
         canvas.onclick = function (e) {
           if (tmpAnnotatedObject != null) {
-            let annotatedObject = new AnnotatedObject(tmpAnnotatedObject.dom);
+            let annotatedObject = new AnnotatedObject();
+            annotatedObject.dom = tmpAnnotatedObject.dom;
             let bbox = new BoundingBox(tmpAnnotatedObject.x, tmpAnnotatedObject.y, tmpAnnotatedObject.width, tmpAnnotatedObject.height);
             annotatedObject.add(new AnnotatedFrame(player.currentFrame, bbox, true));
             annotatedObjectsTracker.annotatedObjects.push(annotatedObject);
@@ -857,7 +859,7 @@
             dom.className = 'rectangle';
             dom.style.left = mouse.x + 'px';
             dom.style.top = mouse.y + 'px';
-            canvas.appendChild(dom);
+            doodle.appendChild(dom);
             tmpAnnotatedObject = { dom: dom };
 
             canvas.style.cursor = 'crosshair';
