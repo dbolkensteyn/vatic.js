@@ -584,13 +584,16 @@
               return;
             } else if (this.frames[i].frameNumber > frame.frameNumber) {
               this.frames.splice(i, 0, frame);
+              if (i == 0) {
+                this.injectInvisibleFrameAtOrigin();
+              }
               this.removeFramesToBeRecomputedFrom(i + 1);
               return;
             }
           }
 
           if (this.frames.length == 0) {
-            this.injectInvisibleFramesBefore(frame.frameNumber);
+            this.injectInvisibleFrameAtOrigin();
           }
           this.frames.push(frame);
         }
@@ -623,10 +626,8 @@
           }
         }
 
-        injectInvisibleFramesBefore(frameNumber) {
-          for (let i = 0; i < frameNumber; i++) {
-            this.frames.push(new AnnotatedFrame(i, null, false));
-          }
+        injectInvisibleFrameAtOrigin() {
+          this.frames.splice(0, 0, new AnnotatedFrame(0, null, false));
         }
       }
 
