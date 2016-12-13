@@ -491,6 +491,9 @@
               }
             }
           }
+          if (pointsCount == 0) {
+            throw 'no points to track';
+          }
 
           jsfeat.optical_flow_lk.track(this.previousPyramid, this.currentPyramid, previousPoints, currentPoints, pointsCount, 30, 30, pointsStatus, 0.01, 0.001);
 
