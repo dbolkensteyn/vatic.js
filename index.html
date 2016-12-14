@@ -7,12 +7,6 @@
     <style>
       .output { font-family: monospace; font-weight: bold; }
 
-      .rectangle {
-        border: 1px solid #FF0000;
-        position: absolute;
-        z-index: 3;
-      }
-
       #doodle {
         position: relative;
         z-index: 2;
@@ -21,8 +15,49 @@
       }
 
       #canvas {
-        position: absolute;
         z-index: 1;
+      }
+
+      .bbox {
+        border: 1px solid #FF0000;
+        position: relative;
+        z-index: 3;
+      }
+
+      .handle, .ui-resizable-handle {
+        width: 11px;
+        height: 11px;
+        border-radius: 50%;
+        background-color: red;
+        position: absolute;
+      }
+
+      .center-drag {
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .ui-resizable-n {
+        left: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .ui-resizable-s {
+        left: 50%;
+        bottom: 0%;
+        transform: translate(-50%, 50%);
+      }
+
+      .ui-resizable-w {
+        top: 50%;
+        transform: translate(-50%, -50%);
+      }
+
+      .ui-resizable-e {
+        right: 0%;
+        top: 50%;
+        transform: translate(50%, -50%);
       }
     </style>
   </head>
@@ -30,12 +65,12 @@
     <h1>VATIC-JS: A pure Javascript video annotation tool</h1>
 
     <div style="width: 300px; height: 300px; border: 1px solid green;">
-      <div id="obj1" class="rectangle" style="position: relative; width: 81px; height: 161px;">
-        <div id="obj1_top" class="ui-resizable-handle ui-resizable-n" style="border-radius: 50%; width: 11px; height: 11px; background-color: red; position: absolute; left: 50%; transform: translate(-50%, -50%);"></div>
-        <div id="obj1_bottom" class="ui-resizable-handle ui-resizable-s" style="border-radius: 50%; width: 11px; height: 11px; background-color: red; position: absolute; left: 50%; transform: translate(-50%, 50%); bottom: 0%;"></div>
-        <div id="obj1_left" class="ui-resizable-handle ui-resizable-w" style="border-radius: 50%; width: 11px; height: 11px; background-color: red; position: absolute; top: 50%; transform: translate(-50%, -50%);"></div>
-        <div id="obj1_right" class="ui-resizable-handle ui-resizable-e" style="border-radius: 50%; width: 11px; height: 11px; background-color: red; position: absolute; right: 0%; top: 50%; transform: translate(50%, -50%);"></div>
-        <div id="obj1_center" style="border-radius: 50%; width: 11px; height: 11px; background-color: red; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);"></div>
+      <div id="obj1" class="bbox" style="width: 81px; height: 161px;">
+        <div id="obj1_top" class="ui-resizable-handle ui-resizable-n"></div>
+        <div id="obj1_bottom" class="ui-resizable-handle ui-resizable-s"></div>
+        <div id="obj1_left" class="ui-resizable-handle ui-resizable-w"></div>
+        <div id="obj1_right" class="ui-resizable-handle ui-resizable-e"></div>
+        <div id="obj1_center" class="handle center-drag"></div>
       </div>
     </div>
 
@@ -158,7 +193,7 @@
 
           for (let i = 0; i < doodle.childNodes.length; i++) {
             let child = doodle.childNodes[i];
-            if (child.className == 'rectangle') {
+            if (child.className == 'bbox') {
               doodle.removeChild(child);
             }
           }
@@ -417,7 +452,7 @@
             mouse.startY = mouse.y;
 
             let dom = document.createElement('div');
-            dom.className = 'rectangle';
+            dom.className = 'bbox';
             dom.style.left = mouse.x + 'px';
             dom.style.top = mouse.y + 'px';
             doodle.appendChild(dom);
