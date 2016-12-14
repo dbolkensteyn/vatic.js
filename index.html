@@ -29,6 +29,16 @@
   <body>
     <h1>VATIC-JS: A pure Javascript video annotation tool</h1>
 
+    <div style="width: 300px; height: 300px; border: 1px solid green;">
+      <div id="obj1" class="rectangle" style="position: relative; width: 81px; height: 161px;">
+        <div id="obj1_top" class="ui-resizable-handle ui-resizable-n" style="border-radius: 50%; width: 11px; height: 11px; background-color: red; position: absolute; left: 50%; transform: translate(-50%, -50%);"></div>
+        <div id="obj1_bottom" class="ui-resizable-handle ui-resizable-s" style="border-radius: 50%; width: 11px; height: 11px; background-color: red; position: absolute; left: 50%; transform: translate(-50%, 50%); bottom: 0%;"></div>
+        <div id="obj1_left" class="ui-resizable-handle ui-resizable-w" style="border-radius: 50%; width: 11px; height: 11px; background-color: red; position: absolute; top: 50%; transform: translate(-50%, -50%);"></div>
+        <div id="obj1_right" class="ui-resizable-handle ui-resizable-e" style="border-radius: 50%; width: 11px; height: 11px; background-color: red; position: absolute; right: 0%; top: 50%; transform: translate(50%, -50%);"></div>
+        <div id="obj1_center" style="border-radius: 50%; width: 11px; height: 11px; background-color: red; position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);"></div>
+      </div>
+    </div>
+
     <ol>
       <li>
         <p>This tool can be used to easily annotate a video, without having to install anything.</p>
@@ -74,9 +84,30 @@
     <script type="text/javascript" src="dist/polyfill.js"></script>
     <script type="text/javascript" src="dist/jsfeat.js"></script>
     <script type="text/javascript" src="https://cdn.jsdelivr.net/pouchdb/6.0.7/pouchdb.min.js"></script>
+    <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+    <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
     <script type="text/javascript" src="vatic.js"></script>
     <script type="text/javascript">
       "use strict";
+
+      $(function() {
+        let $obj1 = $('#obj1');
+        let $obj1_top = $('#obj1_top');
+        let $obj1_bottom = $('#obj1_bottom');
+        let $obj1_left = $('#obj1_left');
+        let $obj1_right = $('#obj1_right');
+        let $obj1_center = $('#obj1_center');
+
+        $obj1.resizable({
+          containment: 'parent',
+          handles: {n: $obj1_top, s: $obj1_bottom, w: $obj1_left, e: $obj1_right}
+        });
+
+        $obj1.draggable({
+          containment: 'parent',
+          handle: $obj1_center
+        });
+      });
 
       let config = {
         // Should be higher than real FPS to not skip real frames
