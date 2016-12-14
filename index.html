@@ -70,14 +70,7 @@
   <body>
     <h1>VATIC-JS: A pure Javascript video annotation tool</h1>
 
-    <div style="width: 300px; height: 300px; border: 1px solid green;">
-      <div id="obj1" class="bbox" style="width: 81px; height: 161px;">
-        <div id="obj1_top" class="ui-resizable-handle ui-resizable-n"></div>
-        <div id="obj1_bottom" class="ui-resizable-handle ui-resizable-s"></div>
-        <div id="obj1_left" class="ui-resizable-handle ui-resizable-w"></div>
-        <div id="obj1_right" class="ui-resizable-handle ui-resizable-e"></div>
-        <div id="obj1_center" class="handle center-drag"></div>
-      </div>
+    <div id="c" style="width: 300px; height: 300px; border: 1px solid green;">
     </div>
 
     <ol>
@@ -131,24 +124,44 @@
     <script type="text/javascript">
       "use strict";
 
-      $(function() {
-        let $obj1 = $('#obj1');
-        let $obj1_top = $('#obj1_top');
-        let $obj1_bottom = $('#obj1_bottom');
-        let $obj1_left = $('#obj1_left');
-        let $obj1_right = $('#obj1_right');
-        let $obj1_center = $('#obj1_center');
+      let newBbox = (width, height) => {
+        let bbox = $('<div></div>');
+        bbox.addClass('bbox');
+        bbox.width(width);
+        bbox.height(height);
 
-        $obj1.resizable({
+        let poles = ['n', 's', 'e', 'w'];
+        let resizeHandles = [];
+        for (let i = 0; i < poles.length; i++) {
+          let handle = document.createElement('div');
+          handle.className = 'ui-resizable-handle ui-resizable-' + poles[i];
+          bbox.append(handle);
+          resizeHandles.push(handle);
+        }
+
+        let moveHandle = document.createElement('div');
+        moveHandle.className = 'handle center-drag';
+        bbox.append(moveHandle);
+
+        bbox.resizable({
           containment: 'parent',
-          handles: {n: $obj1_top, s: $obj1_bottom, w: $obj1_left, e: $obj1_right}
+          handles: {
+            n: resizeHandles[0],
+            s: resizeHandles[1],
+            e: resizeHandles[2],
+            w: resizeHandles[3]
+          }});
+
+        bbox.draggable({
+          containment: 'parent',
+          handle: moveHandle
         });
 
-        $obj1.draggable({
-          containment: 'parent',
-          handle: $obj1_center
-        });
-      });
+        return bbox;
+      }
+
+      $('#c').append(newBbox(80, 20));
+      $('#c').append(newBbox(40, 130));
 
       let config = {
         // Should be higher than real FPS to not skip real frames
