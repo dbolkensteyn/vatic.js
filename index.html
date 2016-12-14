@@ -28,7 +28,8 @@
         width: 11px;
         height: 11px;
         border-radius: 50%;
-        background-color: red;
+        border: 1px solid rgba(255, 0, 0, .5);
+        background-color: rgba(255, 255, 0, .15);
         position: absolute;
       }
 
@@ -36,28 +37,33 @@
         left: 50%;
         top: 50%;
         transform: translate(-50%, -50%);
+        cursor: move;
       }
 
       .ui-resizable-n {
         left: 50%;
         transform: translate(-50%, -50%);
+        cursor: n-resize;
       }
 
       .ui-resizable-s {
         left: 50%;
         bottom: 0%;
         transform: translate(-50%, 50%);
+        cursor: s-resize;
       }
 
       .ui-resizable-w {
         top: 50%;
         transform: translate(-50%, -50%);
+        cursor: w-resize;
       }
 
       .ui-resizable-e {
         right: 0%;
         top: 50%;
         transform: translate(50%, -50%);
+        cursor: e-resize;
       }
     </style>
   </head>
