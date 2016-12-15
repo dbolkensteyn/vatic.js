@@ -20,7 +20,7 @@
 
       .bbox {
         border: 1px solid #FF0000;
-        position: relative;
+        position: absolute;
         z-index: 3;
       }
 
@@ -70,7 +70,7 @@
   <body>
     <h1>VATIC-JS: A pure Javascript video annotation tool</h1>
 
-    <div id="c" style="width: 300px; height: 300px; border: 1px solid green;">
+    <div id="c" style="position: relative; width: 300px; height: 300px; border: 1px solid green;">
     </div>
 
     <ol>
@@ -124,8 +124,11 @@
     <script type="text/javascript">
       "use strict";
 
-      let newBbox = (width, height) => {
-        let bbox = $('<div></div>');
+      let addNewBbox = (parent, width, height) => {
+        let dom = document.createElement('div');
+        parent.appendChild(dom);
+
+        let bbox = $(dom);
         bbox.addClass('bbox');
         bbox.width(width);
         bbox.height(height);
@@ -160,8 +163,8 @@
         return bbox;
       }
 
-      $('#c').append(newBbox(80, 20));
-      $('#c').append(newBbox(40, 130));
+      addNewBbox(document.querySelector('#c'), 80, 20);
+      addNewBbox(document.querySelector('#c'), 40, 130);
 
       let config = {
         // Should be higher than real FPS to not skip real frames
