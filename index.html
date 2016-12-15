@@ -9,9 +9,9 @@
 
       #doodle {
         position: relative;
-        z-index: 2;
         width: 0px;
         height: 0px;
+        z-index: 2;
       }
 
       #canvas {
@@ -70,9 +70,6 @@
   <body>
     <h1>VATIC-JS: A pure Javascript video annotation tool</h1>
 
-    <div id="c" style="position: relative; width: 300px; height: 300px; border: 1px solid green;">
-    </div>
-
     <ol>
       <li>
         <p>This tool can be used to easily annotate a video, without having to install anything.</p>
@@ -123,42 +120,6 @@
     <script type="text/javascript" src="vatic.js"></script>
     <script type="text/javascript">
       "use strict";
-
-      let addNewBbox = (parent, width, height) => {
-        let dom = document.createElement('div');
-        parent.appendChild(dom);
-
-        let bbox = $(dom);
-        bbox.addClass('bbox');
-        bbox.width(width);
-        bbox.height(height);
-
-        let createHandleDiv = (className) => {
-          let handle = document.createElement('div');
-          handle.className = className;
-          bbox.append(handle);
-          return handle;
-        };
-
-        bbox.resizable({
-          containment: 'parent',
-          handles: {
-            n: createHandleDiv('ui-resizable-handle ui-resizable-n'),
-            s: createHandleDiv('ui-resizable-handle ui-resizable-s'),
-            e: createHandleDiv('ui-resizable-handle ui-resizable-e'),
-            w: createHandleDiv('ui-resizable-handle ui-resizable-w')
-          }});
-
-        bbox.draggable({
-          containment: 'parent',
-          handle: createHandleDiv('handle center-drag')
-        });
-
-        return bbox;
-      }
-
-      addNewBbox(document.querySelector('#c'), 80, 20);
-      addNewBbox(document.querySelector('#c'), 40, 130);
 
       let config = {
         // Should be higher than real FPS to not skip real frames
@@ -314,12 +275,6 @@
       playButton.addEventListener('click', playClicked, false);
       pauseButton.addEventListener('click', pauseClicked, false);
       downloadFramesButton.addEventListener('click', downloadFrames, false);
-      document.body.onkeyup = function(e) {
-        if (e.keyCode == 32) {
-          e.preventDefault();
-          player.toogle();
-        }
-      }
 
       function playClicked() {
         player.play();
@@ -413,69 +368,108 @@
         });
       }
 
-      initDraw(document.querySelector('#doodle'));
+      function bboxify(dom) {
+        let bbox = $(dom);
+        bbox.addClass('bbox');
 
-      function initDraw(canvas) {
-        function setMousePosition(e) {
-          let ev = e || window.event;
-          if (ev.pageX) {
-            mouse.x = ev.pageX;
-            mouse.y = ev.pageY;
-          } else if (ev.clientX) {
-            mouse.x = ev.clientX;
-            mouse.y = ev.clientY;
-          }
-          mouse.x -= canvas.offsetLeft;
-          mouse.y -= canvas.offsetTop;
-        }
-
-        let mouse = {
-          x: 0,
-          y: 0,
-          startX: 0,
-          startY: 0
+        let createHandleDiv = (className) => {
+          let handle = document.createElement('div');
+          handle.className = className;
+          bbox.append(handle);
+          return handle;
         };
 
-        let tmpAnnotatedObject = null;
+        bbox.resizable({
+          containment: 'parent',
+          handles: {
+            n: createHandleDiv('ui-resizable-handle ui-resizable-n'),
+            s: createHandleDiv('ui-resizable-handle ui-resizable-s'),
+            e: createHandleDiv('ui-resizable-handle ui-resizable-e'),
+            w: createHandleDiv('ui-resizable-handle ui-resizable-w')
+          }});
 
-        canvas.onmousemove = function (e) {
-          setMousePosition(e);
-          if (tmpAnnotatedObject !== null) {
-            tmpAnnotatedObject.width = Math.abs(mouse.x - mouse.startX);
-            tmpAnnotatedObject.height = Math.abs(mouse.y - mouse.startY);
-            tmpAnnotatedObject.x = (mouse.x - mouse.startX < 0) ? mouse.x : mouse.startX;
-            tmpAnnotatedObject.y = (mouse.y - mouse.startY < 0) ? mouse.y : mouse.startY;
+        bbox.draggable({
+          containment: 'parent',
+          handle: createHandleDiv('handle center-drag')
+        });
+      }
 
-            tmpAnnotatedObject.dom.style.width = tmpAnnotatedObject.width + 'px';
-            tmpAnnotatedObject.dom.style.height = tmpAnnotatedObject.height + 'px';
-            tmpAnnotatedObject.dom.style.left = tmpAnnotatedObject.x + 'px';
-            tmpAnnotatedObject.dom.style.top = tmpAnnotatedObject.y + 'px';
-          }
+      let mouse = {
+        x: 0,
+        y: 0,
+        startX: 0,
+        startY: 0
+      };
+
+      let tmpAnnotatedObject = null;
+
+      doodle.onmousemove = function (e) {
+        let ev = e || window.event;
+        if (ev.pageX) {
+          mouse.x = ev.pageX;
+          mouse.y = ev.pageY;
+        } else if (ev.clientX) {
+          mouse.x = ev.clientX;
+          mouse.y = ev.clientY;
+        }
+        mouse.x -= doodle.offsetLeft;
+        mouse.y -= doodle.offsetTop;
+
+        if (tmpAnnotatedObject !== null) {
+          tmpAnnotatedObject.width = Math.abs(mouse.x - mouse.startX);
+          tmpAnnotatedObject.height = Math.abs(mouse.y - mouse.startY);
+          tmpAnnotatedObject.x = (mouse.x - mouse.startX < 0) ? mouse.x : mouse.startX;
+          tmpAnnotatedObject.y = (mouse.y - mouse.startY < 0) ? mouse.y : mouse.startY;
+
+          tmpAnnotatedObject.dom.style.width = tmpAnnotatedObject.width + 'px';
+          tmpAnnotatedObject.dom.style.height = tmpAnnotatedObject.height + 'px';
+          tmpAnnotatedObject.dom.style.left = tmpAnnotatedObject.x + 'px';
+          tmpAnnotatedObject.dom.style.top = tmpAnnotatedObject.y + 'px';
+        }
+      }
+
+      doodle.onclick = function (e) {
+        if (doodle.style.cursor != 'crosshair') {
+          return;
         }
 
-        canvas.onclick = function (e) {
+        if (tmpAnnotatedObject != null) {
+          let annotatedObject = new AnnotatedObject();
+          annotatedObject.dom = tmpAnnotatedObject.dom;
+          let bbox = new BoundingBox(tmpAnnotatedObject.x, tmpAnnotatedObject.y, tmpAnnotatedObject.width, tmpAnnotatedObject.height);
+          annotatedObject.add(new AnnotatedFrame(player.currentFrame, bbox, true));
+          annotatedObjectsTracker.annotatedObjects.push(annotatedObject);
+          tmpAnnotatedObject = null;
+
+          bboxify(annotatedObject.dom);
+          doodle.style.cursor = 'default';
+        } else {
+          mouse.startX = mouse.x;
+          mouse.startY = mouse.y;
+
+          let dom = document.createElement('div');
+          dom.className = 'bbox';
+          dom.style.left = mouse.x + 'px';
+          dom.style.top = mouse.y + 'px';
+          doodle.appendChild(dom);
+          tmpAnnotatedObject = { dom: dom };
+        }
+      }
+
+      // Keyboard shortcuts
+      document.body.onkeyup = function(e) {
+        if (e.code === 'Space') {
+          e.preventDefault();
+          player.toogle();
+        } else if (e.code === 'KeyN') {
+          doodle.style.cursor = 'crosshair';
+        } else if (e.code === 'Escape') {
           if (tmpAnnotatedObject != null) {
-            let annotatedObject = new AnnotatedObject();
-            annotatedObject.dom = tmpAnnotatedObject.dom;
-            let bbox = new BoundingBox(tmpAnnotatedObject.x, tmpAnnotatedObject.y, tmpAnnotatedObject.width, tmpAnnotatedObject.height);
-            annotatedObject.add(new AnnotatedFrame(player.currentFrame, bbox, true));
-            annotatedObjectsTracker.annotatedObjects.push(annotatedObject);
+            doodle.removeChild(tmpAnnotatedObject.dom);
             tmpAnnotatedObject = null;
-
-            canvas.style.cursor = 'default';
-          } else {
-            mouse.startX = mouse.x;
-            mouse.startY = mouse.y;
-
-            let dom = document.createElement('div');
-            dom.className = 'bbox';
-            dom.style.left = mouse.x + 'px';
-            dom.style.top = mouse.y + 'px';
-            doodle.appendChild(dom);
-            tmpAnnotatedObject = { dom: dom };
-
-            canvas.style.cursor = 'crosshair';
           }
+
+          doodle.style.cursor = 'default';
         }
       }
     </script>
