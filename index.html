@@ -368,7 +368,7 @@
         });
       }
 
-      function bboxify(dom) {
+      function bboxify(dom, onChange) {
         let bbox = $(dom);
         bbox.addClass('bbox');
 
@@ -386,11 +386,20 @@
             s: createHandleDiv('ui-resizable-handle ui-resizable-s'),
             e: createHandleDiv('ui-resizable-handle ui-resizable-e'),
             w: createHandleDiv('ui-resizable-handle ui-resizable-w')
-        }});
+          },
+          stop: (e, ui) => {
+            let position = bbox.position();
+            onChange(Math.round(position.left), Math.round(position.top), Math.round(bbox.width()), Math.round(bbox.height()));
+          }
+        });
 
         bbox.draggable({
           containment: 'parent',
-          handle: createHandleDiv('handle center-drag')
+          handle: createHandleDiv('handle center-drag'),
+          stop: (e, ui) => {
+            let position = bbox.position();
+            onChange(Math.round(position.left), Math.round(position.top), Math.round(bbox.width()), Math.round(bbox.height()));
+          }
         });
       }
 
@@ -441,7 +450,14 @@
           annotatedObjectsTracker.annotatedObjects.push(annotatedObject);
           tmpAnnotatedObject = null;
 
-          bboxify(annotatedObject.dom);
+          bboxify(
+            annotatedObject.dom,
+            (x, y, width, height) => {
+              let bbox = new BoundingBox(x, y, width, height);
+             annotatedObject.add(new AnnotatedFrame(player.currentFrame, bbox, true));
+            }
+          );
+
           doodle.style.cursor = 'default';
         } else {
           mouse.startX = mouse.x;
