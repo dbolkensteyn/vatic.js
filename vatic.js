@@ -218,25 +218,24 @@ class OpticalFlow {
       let newBbox = null;
 
       if (bbox != null) {
-        let diffX = [];
-        let diffY = [];
+        let before = [];
+        let after = [];
 
         for (let j = 0; j < pointsPerObject; j++, p++) {
           if (pointsStatus[p] == 1) {
             let x = p * 2;
             let y = x + 1;
 
-            diffX.push(currentPoints[x] - previousPoints[x]);
-            diffY.push(currentPoints[y] - previousPoints[y]);
+            before.push([previousPoints[x], previousPoints[y]]);
+            after.push([currentPoints[x], currentPoints[y]]);
           }
         }
 
-        // TODO: Also compute new width and height
-
-        if (diffX.length > 0) {
-          let medianX = jsfeat.math.median(diffX, 0, diffX.length - 1);
-          let medianY = jsfeat.math.median(diffY, 0, diffY.length - 1);
-          newBbox = new BoundingBox(bbox.x + Math.round(medianX), bbox.y + Math.round(medianY), bbox.width, bbox.height);
+        if (before.length > 0) {
+          var diff = nudged.estimate('T', before, after);
+          var translation = diff.getTranslation();
+          // TODO compute scale for width and height
+          newBbox = new BoundingBox(Math.round(bbox.x + translation[0]), Math.round(bbox.y + translation[1]), bbox.width, bbox.height);
         }
       }
 
