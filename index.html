@@ -368,7 +368,7 @@
         });
       }
 
-      function bboxify(dom, onChange) {
+      function interactify(dom, onChange) {
         let bbox = $(dom);
         bbox.addClass('bbox');
 
@@ -450,7 +450,7 @@
           annotatedObjectsTracker.annotatedObjects.push(annotatedObject);
           tmpAnnotatedObject = null;
 
-          bboxify(
+          interactify(
             annotatedObject.dom,
             (x, y, width, height) => {
               let bbox = new BoundingBox(x, y, width, height);
