@@ -133,31 +133,25 @@
         bbox.width(width);
         bbox.height(height);
 
-        let poles = ['n', 's', 'e', 'w'];
-        let resizeHandles = [];
-        for (let i = 0; i < poles.length; i++) {
+        let createHandleDiv = (className) => {
           let handle = document.createElement('div');
-          handle.className = 'ui-resizable-handle ui-resizable-' + poles[i];
+          handle.className = className;
           bbox.append(handle);
-          resizeHandles.push(handle);
-        }
-
-        let moveHandle = document.createElement('div');
-        moveHandle.className = 'handle center-drag';
-        bbox.append(moveHandle);
+          return handle;
+        };
 
         bbox.resizable({
           containment: 'parent',
           handles: {
-            n: resizeHandles[0],
-            s: resizeHandles[1],
-            e: resizeHandles[2],
-            w: resizeHandles[3]
+            n: createHandleDiv('ui-resizable-handle ui-resizable-n'),
+            s: createHandleDiv('ui-resizable-handle ui-resizable-s'),
+            e: createHandleDiv('ui-resizable-handle ui-resizable-e'),
+            w: createHandleDiv('ui-resizable-handle ui-resizable-w')
           }});
 
         bbox.draggable({
           containment: 'parent',
-          handle: moveHandle
+          handle: createHandleDiv('handle center-drag')
         });
 
         return bbox;
