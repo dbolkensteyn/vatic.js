@@ -511,10 +511,8 @@
       }
 
       // Keyboard shortcuts
-      document.body.onkeyup = function(e) {
-        if (e.target != document.body) {
-          return;
-        }
+      window.onkeydown = function(e) {
+        let preventDefault = true;
 
         if (e.code === 'Space') {
           player.toogle();
@@ -527,12 +525,11 @@
           }
 
           doodle.style.cursor = 'default';
+        } else {
+          preventDefault = false;
         }
-      }
 
-      // Prevent scroll with spacebar
-      window.onkeydown = function(e) {
-        if (e.code === 'Space' && e.target == document.body) {
+        if (preventDefault) {
           e.preventDefault();
         }
       };
