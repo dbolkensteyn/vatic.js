@@ -151,24 +151,25 @@
       let playButton = document.querySelector('#play');
       let pauseButton = document.querySelector('#pause');
       let speedInput = document.querySelector('#speed');
+      let sliderElement = document.querySelector('#slider');
 
       let framesManager = new FramesManager();
       let annotatedObjectsTracker = new AnnotatedObjectsTracker(framesManager);
 
       let slider = {
         init: function(min, max, onChange) {
-          $('#slider').slider('option', 'min', min);
-          $('#slider').slider('option', 'max', max);
-          $('#slider').on('slidestop', (e, ui) => {
+          $(sliderElement).slider('option', 'min', min);
+          $(sliderElement).slider('option', 'max', max);
+          $(sliderElement).on('slidestop', (e, ui) => {
             onChange(ui.value);
           });
-          $('#slider').slider('enable');
+          $(sliderElement).slider('enable');
         },
         setPosition: function(frameNumber) {
-          $('#slider').slider('option', 'value', frameNumber);
+          $(sliderElement).slider('option', 'value', frameNumber);
         },
         reset: function() {
-          $('#slider').slider({disabled: true});
+          $(sliderElement).slider({disabled: true});
         }
       };
       slider.reset();
@@ -358,6 +359,7 @@
         doodle.style.height = img.height + 'px';
         canvas.width = img.width;
         canvas.height = img.height;
+        sliderElement.style.width = img.width + 'px';
       }
 
       function extractionFileUploaded() {
