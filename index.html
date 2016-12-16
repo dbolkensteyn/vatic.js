@@ -205,14 +205,23 @@
           slider.init(
             0,
             framesManager.frames.totalFrames() - 1,
-            (frameNumber) => {
-              this.pause();
-              this.drawFrame(frameNumber);
-              this.currentFrame = frameNumber;
-            }
+            (frameNumber) => this.seek(frameNumber)
           );
 
           playButton.disabled = false;
+        },
+
+        seek: function(frameNumber) {
+          if (!this.isReady) {
+            return;
+          }
+
+          this.pause();
+
+          if (frameNumber >= 0 && frameNumber < framesManager.frames.totalFrames()) {
+            this.drawFrame(frameNumber);
+            this.currentFrame = frameNumber;
+          }
         },
 
         play: function() {
@@ -266,7 +275,6 @@
           }
 
           this.drawFrame(this.currentFrame).then(() => {
-            slider.setPosition(this.currentFrame);
             this.currentFrame++;
             this.timeout = setTimeout(() => this.nextFrame(), 1000 / (config.fps * parseFloat(speedInput.value)));
           });
@@ -291,6 +299,8 @@
                   annotatedObject.dom.style.display = 'none';
                 }
               }
+
+              slider.setPosition(this.currentFrame);
 
               resolve();
             });
@@ -525,6 +535,10 @@
           }
 
           doodle.style.cursor = 'default';
+        } else if (e.code == 'ArrowLeft') {
+          player.seek(player.currentFrame - 1);
+        } else if (e.code == 'ArrowRight') {
+          player.seek(player.currentFrame + 1);
         } else {
           preventDefault = false;
         }
