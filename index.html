@@ -4,6 +4,7 @@
   <head>
     <meta http-equiv="content-type" content="text/html; charset=utf-8">
     <title>VATIC-JS: A pure Javascript video annotation tool</title>
+    <link rel="stylesheet" href="//code.jquery.com/ui/1.12.0/themes/smoothness/jquery-ui.css">
     <style>
       .output { font-family: monospace; font-weight: bold; }
 
@@ -101,6 +102,7 @@
           <canvas id="canvas"></canvas>
         </div>
         <p><input type="button" id="play" value="Play" disabled="true" /><input type="button" id="pause" value="Pause" disabled="true" style="display: none;" /></p>
+        <div id="slider"></div>
         <p><label for="speed">Speed multiplier: </label><input type="text" id="speed" value="1.00" size="4" /></p>
         <p>Tip: Zoom in with your browser to place the bounding boxes more accurately.</p>
       </li>
@@ -153,6 +155,24 @@
       let framesManager = new FramesManager();
       let annotatedObjectsTracker = new AnnotatedObjectsTracker(framesManager);
 
+      let slider = {
+        init: function(min, max, onChange) {
+          $('#slider').slider('option', 'min', min);
+          $('#slider').slider('option', 'max', max);
+          $('#slider').on('slidestop', (e, ui) => {
+            onChange(ui.value);
+          });
+          $('#slider').slider('enable');
+        },
+        setPosition: function(frameNumber) {
+          $('#slider').slider('option', 'value', frameNumber);
+        },
+        reset: function() {
+          $('#slider').slider({disabled: true});
+        }
+      };
+      slider.reset();
+
       let player = {
         currentFrame: 0,
         isPlaying: false,
@@ -163,6 +183,8 @@
           this.currentFrame = 0;
           this.isPlaying = false;
           this.isReady = false;
+
+          slider.reset();
 
           playButton.disabled = true;
           playButton.style.display = 'block';
@@ -179,6 +201,16 @@
 
         ready: function() {
           this.isReady = true;
+
+          slider.init(
+            0,
+            framesManager.frames.totalFrames() - 1,
+            (frameNumber) => {
+              this.pause();
+              this.drawFrame(frameNumber);
+              this.currentFrame = frameNumber;
+            }
+          );
 
           playButton.disabled = false;
         },
@@ -233,30 +265,35 @@
             return;
           }
 
-          annotatedObjectsTracker.getFrameWithObjects(this.currentFrame).then((frameWithObjects) => {
-            if (!this.isPlaying) {
-              return;
-            }
-
-            ctx.drawImage(frameWithObjects.img, 0, 0);
-
-            for (let i = 0; i < frameWithObjects.objects.length; i++) {
-              let object = frameWithObjects.objects[i];
-              let annotatedObject = object.annotatedObject;
-              let annotatedFrame = object.annotatedFrame;
-              if (annotatedFrame.isVisible()) {
-                annotatedObject.dom.style.display = 'block';
-                annotatedObject.dom.style.width = annotatedFrame.bbox.width + 'px';
-                annotatedObject.dom.style.height = annotatedFrame.bbox.height + 'px';
-                annotatedObject.dom.style.left = annotatedFrame.bbox.x + 'px';
-                annotatedObject.dom.style.top = annotatedFrame.bbox.y + 'px';
-              } else {
-                annotatedObject.dom.style.display = 'none';
-              }
-            }
-
+          this.drawFrame(this.currentFrame).then(() => {
+            slider.setPosition(this.currentFrame);
             this.currentFrame++;
             this.timeout = setTimeout(() => this.nextFrame(), 1000 / (config.fps * parseFloat(speedInput.value)));
+          });
+        },
+
+        drawFrame: function(frameNumber) {
+          return new Promise((resolve, _) => {
+            annotatedObjectsTracker.getFrameWithObjects(frameNumber).then((frameWithObjects) => {
+              ctx.drawImage(frameWithObjects.img, 0, 0);
+
+              for (let i = 0; i < frameWithObjects.objects.length; i++) {
+                let object = frameWithObjects.objects[i];
+                let annotatedObject = object.annotatedObject;
+                let annotatedFrame = object.annotatedFrame;
+                if (annotatedFrame.isVisible()) {
+                  annotatedObject.dom.style.display = 'block';
+                  annotatedObject.dom.style.width = annotatedFrame.bbox.width + 'px';
+                  annotatedObject.dom.style.height = annotatedFrame.bbox.height + 'px';
+                  annotatedObject.dom.style.left = annotatedFrame.bbox.x + 'px';
+                  annotatedObject.dom.style.top = annotatedFrame.bbox.y + 'px';
+                } else {
+                  annotatedObject.dom.style.display = 'none';
+                }
+              }
+
+              resolve();
+            });
           });
         },
 
