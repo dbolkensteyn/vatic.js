@@ -186,7 +186,8 @@ class OpticalFlow {
 
     // TODO: Move all configuration to config
 
-    let pointsPerObject = (10 + 1) * (10 + 1);
+    let pointsPerDimension = 11;
+    let pointsPerObject = pointsPerDimension * pointsPerDimension;
     let pointsCountUpperBound = bboxes.length * pointsPerObject;
     let pointsStatus = new Uint8Array(pointsCountUpperBound);
     let previousPoints = new Float32Array(pointsCountUpperBound * 2);
@@ -196,10 +197,10 @@ class OpticalFlow {
     for (let i = 0, n = 0; i < bboxes.length; i++) {
       let bbox = bboxes[i];
       if (bbox != null) {
-        for (let x = 0; x <= 10; x++) {
-          for (let y = 0; y <= 10; y++) {
-            previousPoints[pointsCount*2] = bbox.x + x * (bbox.width / 10);
-            previousPoints[pointsCount*2 + 1] = bbox.y + y * (bbox.height / 10);
+        for (let x = 0; x < pointsPerDimension; x++) {
+          for (let y = 0; y < pointsPerDimension; y++) {
+            previousPoints[pointsCount*2] = bbox.x + x * (bbox.width / (pointsPerDimension - 1));
+            previousPoints[pointsCount*2 + 1] = bbox.y + y * (bbox.height / (pointsPerDimension - 1));
             pointsCount++;
           }
         }
@@ -234,7 +235,6 @@ class OpticalFlow {
         if (before.length > 0) {
           var diff = nudged.estimate('T', before, after);
           var translation = diff.getTranslation();
-          // TODO compute scale for width and height
           newBbox = new BoundingBox(Math.round(bbox.x + translation[0]), Math.round(bbox.y + translation[1]), bbox.width, bbox.height);
         }
       }
