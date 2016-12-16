@@ -475,8 +475,11 @@
 
       // Keyboard shortcuts
       document.body.onkeyup = function(e) {
+        if (e.target != document.body) {
+          return;
+        }
+
         if (e.code === 'Space') {
-          e.preventDefault();
           player.toogle();
         } else if (e.code === 'KeyN') {
           doodle.style.cursor = 'crosshair';
@@ -489,6 +492,13 @@
           doodle.style.cursor = 'default';
         }
       }
+
+      // Prevent scroll with spacebar
+      window.onkeydown = function(e) {
+        if (e.code === 'Space' && e.target == document.body) {
+          e.preventDefault();
+        }
+      };
     </script>
   </body>
 </html>
