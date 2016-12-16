@@ -40,6 +40,7 @@ function extractFramesFromVideo(config, file, progress) {
   let totalFrames = 0;
   let processedFrames = 0;
   let lastApproxFrame = -1;
+  let lastProgressFrame = -1;
   let attachmentName = 'img' + config.imageExtension;
 
   return new Promise((_resolve, _) => {
@@ -93,7 +94,10 @@ function extractFramesFromVideo(config, file, progress) {
           db.putAttachment(frameNumber.toString(), attachmentName, blob, config.imageMimeType).then((doc) => {
             processedFrames++;
 
-            progress(video.currentTime / video.duration, processedFrames, blob);
+            if (frameNumber > lastProgressFrame) {
+              lastProgressFrame = frameNumber;
+              progress(video.currentTime / video.duration, processedFrames, blob);
+            }
 
             if (video.ended && processedFrames == totalFrames) {
               videoEnded();
