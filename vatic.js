@@ -189,6 +189,7 @@ class OpticalFlow {
     this.currentPyramid.build(this.currentPyramid.data[0]);
 
     // TODO: Move all configuration to config
+    let bboxBorderWidth = 1;
 
     let pointsPerDimension = 11;
     let pointsPerObject = pointsPerDimension * pointsPerDimension;
@@ -237,9 +238,17 @@ class OpticalFlow {
         }
 
         if (before.length > 0) {
-          var diff = nudged.estimate('T', before, after);
-          var translation = diff.getTranslation();
-          newBbox = new BoundingBox(Math.round(bbox.x + translation[0]), Math.round(bbox.y + translation[1]), bbox.width, bbox.height);
+          let diff = nudged.estimate('T', before, after);
+          let translation = diff.getTranslation();
+          let newX = Math.round(bbox.x + translation[0]);
+          let newY = Math.round(bbox.y + translation[1]);
+          let maxWidth = imageData.width - 2*bboxBorderWidth - newX;
+          let maxHeight = imageData.height - 2*bboxBorderWidth - newY;
+          if (maxWidth > 0 && maxHeight > 0) {
+            let newWidth = Math.min(bbox.width, maxWidth);
+            let newHeight = Math.min(bbox.height, maxHeight);
+            newBbox = new BoundingBox(newX, newY, newWidth, newHeight);
+          }
         }
       }
 
