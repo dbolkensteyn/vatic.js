@@ -152,7 +152,7 @@
         <div id="objects"></div>
       </li>
       <li>
-        <p>Download the <a href="http://web.mit.edu/vondrick/vatic/" target="new">vatic</a>-compatible XML annotations file.</p>
+        <p><input type="button" id="generateXml" value="Download" /> the <a href="http://web.mit.edu/vondrick/vatic/" target="new">vatic</a>-compatible XML annotations file.</p>
       </li>
     </ol>
 
@@ -197,6 +197,7 @@
       let pauseButton = document.querySelector('#pause');
       let speedInput = document.querySelector('#speed');
       let sliderElement = document.querySelector('#slider');
+      let generateXmlButton = document.querySelector('#generateXml');
 
       let framesManager = new FramesManager();
       let annotatedObjectsTracker = new AnnotatedObjectsTracker(framesManager);
@@ -371,6 +372,7 @@
       playButton.addEventListener('click', playClicked, false);
       pauseButton.addEventListener('click', pauseClicked, false);
       downloadFramesButton.addEventListener('click', downloadFrames, false);
+      generateXmlButton.addEventListener('click', generateXml, false);
 
       function playClicked() {
         player.play();
@@ -627,6 +629,69 @@
         div.append(del);
 
         $('#objects').append(div);
+      }
+
+      function generateXml() {
+        let xml = '<?xml version="1.0" encoding="utf-8"?>\n';
+        xml += '<annotation>\n';
+        xml += '  <folder>not available</folder>\n';
+        xml += '  <filename>not available</folder>\n';
+        xml += '  <source>\n';
+        xml += '    <type>video</type>\n';
+        xml += '    <sourceImage>vatic frames</sourceImage>\n';
+        xml += '    <sourceAnnotation>vatic</sourceAnnotation>\n';
+        xml += '  </source>\n';
+
+        let allFramesReady;
+        let totalFrames = framesManager.frames.totalFrames();
+        if (totalFrames > 0) {
+          allFramesReady = annotatedObjectsTracker.getFrameWithObjects(totalFrames - 1);
+        } else {
+          allFramesReady = new Promise((r, _) => { r(); });
+        }
+
+        allFramesReady.then(() => {
+          for (let i = 0; i < annotatedObjectsTracker.annotatedObjects.length; i++) {
+            let annotatedObject = annotatedObjectsTracker.annotatedObjects[i];
+
+            xml += '  <object>\n';
+            xml += '    <name>' + annotatedObject.name + '</name>\n';
+            xml += '    <moving>true</moving>\n';
+            xml += '    <action/>\n';
+            xml += '    <verified>0</verified>\n';
+            xml += '    <id>' + annotatedObject.id + '</id>\n';
+            xml += '    <createdFrame>0</createdFrame>\n';
+            xml += '    <startFrame>0</startFrame>\n';
+            xml += '    <endFrame>' + (totalFrames - 1 ) + '</endFrame>\n';
+
+            for (let frameNumber = 0; frameNumber < totalFrames; frameNumber++) {
+              let annotatedFrame = annotatedObject.get(frameNumber);
+              if (annotatedFrame == null) {
+                throw 'all frames should be ready';
+              }
+
+              let bbox = annotatedFrame.bbox;
+              if (bbox != null) {
+                let isGroundThrugh = annotatedFrame.isGroundTruth ? 1 : 0;
+
+                xml += '    ';
+                xml += '<polygon>';
+                xml += '<t>' + frameNumber + '</t>';
+                xml += '<pt><x>' + bbox.x + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>';
+                xml += '<pt><x>' + bbox.x + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>';
+                xml += '<pt><x>' + (bbox.x + bbox.width) + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>';
+                xml += '<pt><x>' + (bbox.x + bbox.width) + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>';
+                xml += '</polygon>\n';
+              }
+            }
+
+            xml += '  </object>\n';
+          }
+
+          xml += '</annotation>\n';
+
+          console.log(xml);
+        });
       }
 
       // Keyboard shortcuts
