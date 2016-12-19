@@ -240,14 +240,16 @@ class OpticalFlow {
         if (before.length > 0) {
           let diff = nudged.estimate('T', before, after);
           let translation = diff.getTranslation();
-          let newX = Math.round(bbox.x + translation[0]);
-          let newY = Math.round(bbox.y + translation[1]);
-          let maxWidth = imageData.width - 2*bboxBorderWidth - newX;
-          let maxHeight = imageData.height - 2*bboxBorderWidth - newY;
-          if (maxWidth > 0 && maxHeight > 0) {
-            let newWidth = Math.min(bbox.width, maxWidth);
-            let newHeight = Math.min(bbox.height, maxHeight);
-            newBbox = new BoundingBox(newX, newY, newWidth, newHeight);
+
+          let minX = Math.max(Math.round(bbox.x + translation[0]), 0);
+          let minY = Math.max(Math.round(bbox.y + translation[1]), 0);
+          let maxX = Math.min(Math.round(bbox.x + bbox.width + translation[0]), imageData.width - 2*bboxBorderWidth);
+          let maxY = Math.min(Math.round(bbox.y + bbox.height + translation[1]), imageData.height - 2*bboxBorderWidth);
+          let newWidth = maxX - minX;
+          let newHeight = maxY - minY;
+
+          if (newWidth > 0 && newHeight > 0) {
+            newBbox = new BoundingBox(minX, minY, newWidth, newHeight);
           }
         }
       }
