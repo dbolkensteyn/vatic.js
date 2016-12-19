@@ -132,7 +132,7 @@
         <p>Download the extracted frames zip archive: <input type="button" id="downloadFrames" value="Get frames zip archive" disabled="disabled" /></p>
       </li>
       <li>
-        <p>Optional: Load an existing <a href="http://web.mit.edu/vondrick/vatic/" target="new">vatic</a>-compatible XML annotation file.</p>
+        <p>Optional: Load an existing <a href="http://web.mit.edu/vondrick/vatic/" target="new">vatic</a>-compatible XML annotation file: <input type="file" id="xmlFile" accept=".xml" /></p>
         <p>This is useful for example if:</p>
         <ul>
           <li>You are resuming a previous annotation.</li>
@@ -190,6 +190,7 @@
       let ctx = canvas.getContext('2d');
       let videoFile = document.querySelector('#videoFile');
       let zipFile = document.querySelector('#zipFile');
+      let xmlFile = document.querySelector('#xmlFile');
       let videoDimensionsElement = document.querySelector('#videoDimensions');
       let extractionProgressElement = document.querySelector('#extractionProgress');
       let downloadFramesButton = document.querySelector('#downloadFrames');
@@ -369,6 +370,7 @@
 
       videoFile.addEventListener('change', extractionFileUploaded, false);
       zipFile.addEventListener('change', extractionFileUploaded, false);
+      xmlFile.addEventListener('change', importXml, false);
       playButton.addEventListener('click', playClicked, false);
       pauseButton.addEventListener('click', pauseClicked, false);
       downloadFramesButton.addEventListener('click', downloadFrames, false);
@@ -566,13 +568,18 @@
           mouse.startX = mouse.x;
           mouse.startY = mouse.y;
 
-          let dom = document.createElement('div');
-          dom.className = 'bbox';
+          let dom = newBboxElement();
           dom.style.left = mouse.x + 'px';
           dom.style.top = mouse.y + 'px';
-          doodle.appendChild(dom);
           tmpAnnotatedObject = { dom: dom };
         }
+      }
+
+      function newBboxElement() {
+          let dom = document.createElement('div');
+          dom.className = 'bbox';
+          doodle.appendChild(dom);
+          return dom;
       }
 
       function addAnnotatedObjectControls(annotatedObject) {
@@ -637,7 +644,7 @@
         let xml = '<?xml version="1.0" encoding="utf-8"?>\n';
         xml += '<annotation>\n';
         xml += '  <folder>not available</folder>\n';
-        xml += '  <filename>not available</folder>\n';
+        xml += '  <filename>not available</filename>\n';
         xml += '  <source>\n';
         xml += '    <type>video</type>\n';
         xml += '    <sourceImage>vatic frames</sourceImage>\n';
@@ -718,6 +725,83 @@
           e.preventDefault();
         }
       };
+
+      function importXml() {
+        if (this.files.length != 1) {
+          return;
+        }
+
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          if (e.target.readyState != 2) {
+            return;
+          }
+
+          if (e.target.error) {
+            throw 'file reader error';
+            return;
+          }
+
+          let xml = $($.parseXML(e.target.result));
+          let objects = xml.find('object');
+          for (let i = 0; i < objects.length; i++) {
+            let object = $(objects[i]);
+            let name = object.find('name').text();
+            let id = object.find('id').text();
+
+            let annotatedObject = new AnnotatedObject();
+            annotatedObject.name = name;
+            annotatedObject.id = id;
+            annotatedObject.dom = newBboxElement();
+            annotatedObjectsTracker.annotatedObjects.push(annotatedObject);
+
+            interactify(
+              annotatedObject.dom,
+              (x, y, width, height) => {
+                let bbox = new BoundingBox(x, y, width, height);
+                annotatedObject.add(new AnnotatedFrame(player.currentFrame, bbox, true));
+              }
+            );
+
+            addAnnotatedObjectControls(annotatedObject);
+
+            let lastFrame = -1;
+            let polygons = object.find('polygon');
+            for (let j = 0; j < polygons.length; j++) {
+              let polygon = $(polygons[j]);
+              let frameNumber = parseInt(polygon.find('t').text());
+              let pts = polygon.find('pt');
+              let topLeft = $(pts[0]);
+              let bottomRight = $(pts[2]);
+              let isGroundThrough = parseInt(topLeft.find('l').text()) == 1;
+              let x = parseInt(topLeft.find('x').text());
+              let y = parseInt(topLeft.find('y').text());
+              let w = parseInt(bottomRight.find('x').text()) - x;
+              let h = parseInt(bottomRight.find('y').text()) - y;
+
+              if (lastFrame + 1 != frameNumber) {
+                let annotatedFrame = new AnnotatedFrame(lastFrame + 1, null, true);
+                annotatedObject.add(annotatedFrame);
+              }
+
+              let bbox = new BoundingBox(x, y, w, h);
+              let annotatedFrame = new AnnotatedFrame(frameNumber, bbox, isGroundThrough);
+              annotatedObject.add(annotatedFrame);
+
+              lastFrame = frameNumber;
+            }
+
+            let endFrame = parseInt(object.find('endFrame').text());
+            if (lastFrame + 1 <= endFrame) {
+              let annotatedFrame = new AnnotatedFrame(lastFrame + 1, null, true);
+              annotatedObject.add(annotatedFrame);
+            }
+          }
+
+          player.drawFrame(player.currentFrame);
+        };
+        reader.readAsText(this.files[0]);
+      }
     </script>
   </body>
 </html>
