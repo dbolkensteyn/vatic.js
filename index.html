@@ -584,11 +584,17 @@
 
       function addAnnotatedObjectControls(annotatedObject) {
         let name = $('<input type="text" value="Name?" />');
+        if (annotatedObject.name) {
+          name.val(annotatedObject.name);
+        }
         name.on('change keyup paste mouseup', function() {
           annotatedObject.name = this.value;
         });
 
         let id = $('<input type="text" value="ID?" />');
+        if (annotatedObject.id) {
+          id.val(annotatedObject.id);
+        }
         id.on('change keyup paste mouseup', function() {
           annotatedObject.id = this.value;
         });
