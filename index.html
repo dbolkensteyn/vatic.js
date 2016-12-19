@@ -152,7 +152,7 @@
         <div id="objects"></div>
       </li>
       <li>
-        <p><input type="button" id="generateXml" value="Download" /> the <a href="http://web.mit.edu/vondrick/vatic/" target="new">vatic</a>-compatible XML annotations file.</p>
+        <p><input type="button" id="generateXml" value="Generate" disabled="true" /> the <a href="http://web.mit.edu/vondrick/vatic/" target="new">vatic</a>-compatible XML annotations file.</p>
       </li>
     </ol>
 
@@ -419,6 +419,7 @@
         videoFile.disabled = true;
         zipFile.disabled = true;
         downloadFramesButton.disabled = true;
+        generateXmlButton.disabled = true;
         player.initialize();
 
         let promise;
@@ -458,6 +459,7 @@
 
                 playButton.disabled = false;
                 downloadFramesButton.disabled = false;
+                generateXmlButton.disabled = false;
               });
             });
           }
