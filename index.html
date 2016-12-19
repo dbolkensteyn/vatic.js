@@ -132,7 +132,7 @@
         <p>Download the extracted frames zip archive: <input type="button" id="downloadFrames" value="Get frames zip archive" disabled="disabled" /></p>
       </li>
       <li>
-        <p>Optional: Load an existing <a href="http://web.mit.edu/vondrick/vatic/" target="new">vatic</a>-compatible XML annotation file: <input type="file" id="xmlFile" accept=".xml" /></p>
+        <p>Optional: Load an existing <a href="http://web.mit.edu/vondrick/vatic/" target="new">vatic</a>-compatible XML annotation file: <input type="file" id="xmlFile" accept=".xml" disabled="true" /></p>
         <p>This is useful for example if:</p>
         <ul>
           <li>You are resuming a previous annotation.</li>
@@ -420,6 +420,7 @@
 
         videoFile.disabled = true;
         zipFile.disabled = true;
+        xmlFile.disabled = true;
         downloadFramesButton.disabled = true;
         generateXmlButton.disabled = true;
         player.initialize();
@@ -459,6 +460,7 @@
                 framesManager.set(frames);
                 player.ready();
 
+                xmlFile.disabled = false;
                 playButton.disabled = false;
                 downloadFramesButton.disabled = false;
                 generateXmlButton.disabled = false;
