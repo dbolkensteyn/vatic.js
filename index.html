@@ -685,7 +685,10 @@
 
         xml += '</annotation>\n';
 
-        console.log(xml);
+        let writeStream = streamSaver.createWriteStream('output.xml').getWriter();
+        let encoder = new TextEncoder();
+        writeStream.write(encoder.encode(xml));
+        writeStream.close();
       }
 
       // Keyboard shortcuts
