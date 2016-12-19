@@ -149,6 +149,7 @@
         <div id="slider"></div>
         <p><label for="speed">Speed multiplier: </label><input type="text" id="speed" value="1.00" size="4" /></p>
         <p>Tip: Zoom in with your browser to place the bounding boxes more accurately.</p>
+        <div id="objects"></div>
       </li>
       <li>
         <p>Download the <a href="http://web.mit.edu/vondrick/vatic/" target="new">vatic</a>-compatible XML annotations file.</p>
@@ -340,8 +341,10 @@
                   annotatedObject.dom.style.height = annotatedFrame.bbox.height + 'px';
                   annotatedObject.dom.style.left = annotatedFrame.bbox.x + 'px';
                   annotatedObject.dom.style.top = annotatedFrame.bbox.y + 'px';
+                  annotatedObject.visible.prop('checked', true);
                 } else {
                   annotatedObject.dom.style.display = 'none';
+                  annotatedObject.visible.prop('checked', false);
                 }
               }
 
@@ -552,6 +555,8 @@
             }
           );
 
+          addAnnotatedObjectControls(annotatedObject);
+
           doodle.style.cursor = 'default';
         } else {
           mouse.startX = mouse.x;
@@ -564,6 +569,64 @@
           doodle.appendChild(dom);
           tmpAnnotatedObject = { dom: dom };
         }
+      }
+
+      function addAnnotatedObjectControls(annotatedObject) {
+        let name = $('<input type="text" value="Name?" />');
+        name.on('change keyup paste mouseup', function() {
+          annotatedObject.name = this.value;
+        });
+
+        let id = $('<input type="text" value="ID?" />');
+        id.on('change keyup paste mouseup', function() {
+          annotatedObject.id = this.value;
+        });
+
+        let visibleLabel = $('<label>');
+        let visible = $('<input type="checkbox" checked="checked" />');
+        annotatedObject.visible = visible;
+        visible.change(function() {
+          let bbox;
+          if (this.checked) {
+            annotatedObject.dom.style.display = 'block';
+            let jquery = $(annotatedObject.dom);
+            let position = jquery.position();
+            bbox = new BoundingBox(Math.round(position.left), Math.round(position.top), Math.round(jquery.width()), Math.round(jquery.height()));
+          } else {
+            annotatedObject.dom.style.display = 'none';
+            bbox = null;
+          }
+          annotatedObject.add(new AnnotatedFrame(player.currentFrame, bbox, true));
+        });
+        visibleLabel.append(visible);
+        visibleLabel.append('Is visible?');
+        let del = $('<input type="button" value="Delete" />');
+        del.click(function() {
+          div.remove();
+          $(annotatedObject.dom).remove();
+          for (let i = 0; annotatedObjectsTracker.annotatedObjects.length; i++) {
+            if (annotatedObject === annotatedObjectsTracker.annotatedObjects[i]) {
+              annotatedObjectsTracker.annotatedObjects.splice(i, 1);
+              break;
+            }
+          }
+        });
+
+        let div = $('<div></div>');
+        div.css({
+          'border': '1px solid black',
+          'display': 'inline-block',
+          'margin': '5px',
+          'padding': '10px'});
+        div.append(name);
+        div.append($('<br />'));
+        div.append(id);
+        div.append($('<br />'));
+        div.append(visibleLabel);
+        div.append($('<br />'));
+        div.append(del);
+
+        $('#objects').append(div);
       }
 
       // Keyboard shortcuts
