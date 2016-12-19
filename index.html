@@ -797,8 +797,7 @@
               lastFrame = frameNumber;
             }
 
-            let endFrame = parseInt(object.find('endFrame').text());
-            if (lastFrame + 1 <= endFrame) {
+            if (lastFrame + 1 < framesManager.frames.totalFrames()) {
               let annotatedFrame = new AnnotatedFrame(lastFrame + 1, null, true);
               annotatedObject.add(annotatedFrame);
             }
