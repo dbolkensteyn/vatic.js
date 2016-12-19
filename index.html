@@ -642,56 +642,48 @@
         xml += '    <sourceAnnotation>vatic</sourceAnnotation>\n';
         xml += '  </source>\n';
 
-        let allFramesReady;
         let totalFrames = framesManager.frames.totalFrames();
-        if (totalFrames > 0) {
-          allFramesReady = annotatedObjectsTracker.getFrameWithObjects(totalFrames - 1);
-        } else {
-          allFramesReady = new Promise((r, _) => { r(); });
-        }
+        for (let i = 0; i < annotatedObjectsTracker.annotatedObjects.length; i++) {
+          let annotatedObject = annotatedObjectsTracker.annotatedObjects[i];
 
-        allFramesReady.then(() => {
-          for (let i = 0; i < annotatedObjectsTracker.annotatedObjects.length; i++) {
-            let annotatedObject = annotatedObjectsTracker.annotatedObjects[i];
+          xml += '  <object>\n';
+          xml += '    <name>' + annotatedObject.name + '</name>\n';
+          xml += '    <moving>true</moving>\n';
+          xml += '    <action/>\n';
+          xml += '    <verified>0</verified>\n';
+          xml += '    <id>' + annotatedObject.id + '</id>\n';
+          xml += '    <createdFrame>0</createdFrame>\n';
+          xml += '    <startFrame>0</startFrame>\n';
+          xml += '    <endFrame>' + (totalFrames - 1 ) + '</endFrame>\n';
 
-            xml += '  <object>\n';
-            xml += '    <name>' + annotatedObject.name + '</name>\n';
-            xml += '    <moving>true</moving>\n';
-            xml += '    <action/>\n';
-            xml += '    <verified>0</verified>\n';
-            xml += '    <id>' + annotatedObject.id + '</id>\n';
-            xml += '    <createdFrame>0</createdFrame>\n';
-            xml += '    <startFrame>0</startFrame>\n';
-            xml += '    <endFrame>' + (totalFrames - 1 ) + '</endFrame>\n';
-
-            for (let frameNumber = 0; frameNumber < totalFrames; frameNumber++) {
-              let annotatedFrame = annotatedObject.get(frameNumber);
-              if (annotatedFrame == null) {
-                throw 'all frames should be ready';
-              }
-
-              let bbox = annotatedFrame.bbox;
-              if (bbox != null) {
-                let isGroundThrugh = annotatedFrame.isGroundTruth ? 1 : 0;
-
-                xml += '    ';
-                xml += '<polygon>';
-                xml += '<t>' + frameNumber + '</t>';
-                xml += '<pt><x>' + bbox.x + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>';
-                xml += '<pt><x>' + bbox.x + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>';
-                xml += '<pt><x>' + (bbox.x + bbox.width) + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>';
-                xml += '<pt><x>' + (bbox.x + bbox.width) + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>';
-                xml += '</polygon>\n';
-              }
+          for (let frameNumber = 0; frameNumber < totalFrames; frameNumber++) {
+            let annotatedFrame = annotatedObject.get(frameNumber);
+            if (annotatedFrame == null) {
+              window.alert('Play the video in full before downloading the XML so that bounding box data is available for all frames.');
+              return;
             }
 
-            xml += '  </object>\n';
+            let bbox = annotatedFrame.bbox;
+            if (bbox != null) {
+              let isGroundThrugh = annotatedFrame.isGroundTruth ? 1 : 0;
+
+              xml += '    ';
+              xml += '<polygon>';
+              xml += '<t>' + frameNumber + '</t>';
+              xml += '<pt><x>' + bbox.x + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>';
+              xml += '<pt><x>' + bbox.x + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>';
+              xml += '<pt><x>' + (bbox.x + bbox.width) + '</x><y>' + (bbox.y + bbox.height) + '</y><l>' + isGroundThrugh + '</l></pt>';
+              xml += '<pt><x>' + (bbox.x + bbox.width) + '</x><y>' + bbox.y + '</y><l>' + isGroundThrugh + '</l></pt>';
+              xml += '</polygon>\n';
+            }
           }
 
-          xml += '</annotation>\n';
+          xml += '  </object>\n';
+        }
 
-          console.log(xml);
-        });
+        xml += '</annotation>\n';
+
+        console.log(xml);
       }
 
       // Keyboard shortcuts
