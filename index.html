@@ -716,8 +716,6 @@
           return;
         }
 
-        this.disabled = true;
-
         var reader = new FileReader();
         reader.onload = (e) => {
           if (e.target.readyState != 2) {
@@ -784,8 +782,6 @@
           }
 
           player.drawFrame(player.currentFrame);
-
-          this.disabled = false;
         };
         reader.readAsText(this.files[0]);
       }
