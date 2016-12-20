@@ -142,13 +142,16 @@
       </li>
       <li>
         <p>Manually annotate the frame sequence:</p>
+        <p>To create a new bounding box, first click 'n' (for new), and then left click on two locations in the video corresponding to the corners of the box.</p>
+        <p>Tip: Use the spacebar to play/pause the video, and the left and right arrows to navigate frame by frame.</p>
+        <p>Tip: The visibility of each object can be toogled with its visiblity checkbox under the video.</p>
+        <p>Tip: Zoom in with your browser to place the bounding boxes more accurately.</p>
         <div id="doodle">
           <canvas id="canvas"></canvas>
         </div>
         <p><input type="button" id="play" value="Play" disabled="true" /><input type="button" id="pause" value="Pause" disabled="true" style="display: none;" /></p>
         <div id="slider"></div>
         <p><label for="speed">Speed multiplier: </label><input type="text" id="speed" value="1.00" size="4" /></p>
-        <p>Tip: Zoom in with your browser to place the bounding boxes more accurately.</p>
         <div id="objects"></div>
       </li>
       <li>
