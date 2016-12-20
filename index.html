@@ -232,29 +232,14 @@
           this.isPlaying = false;
           this.isReady = false;
 
-          slider.reset();
-
           playButton.disabled = true;
           playButton.style.display = 'block';
           pauseButton.disabled = true;
           pauseButton.style.display = 'none';
-
-          for (let i = 0; i < doodle.childNodes.length; i++) {
-            let child = doodle.childNodes[i];
-            if (child.className == 'bbox') {
-              doodle.removeChild(child);
-            }
-          }
         },
 
         ready: function() {
           this.isReady = true;
-
-          slider.init(
-            0,
-            framesManager.frames.totalFrames() - 1,
-            (frameNumber) => this.seek(frameNumber)
-          );
 
           playButton.disabled = false;
         },
@@ -368,6 +353,19 @@
         }
       };
 
+      function clearAllAnnotatedObjects() {
+        for (let i = 0; i < annotatedObjectsTracker.annotatedObjects.length; i++) {
+          clearAnnotatedObject(i);
+        }
+      }
+
+      function clearAnnotatedObject(i) {
+        let annotatedObject = annotatedObjectsTracker.annotatedObjects[i];
+        annotatedObject.controls.remove();
+        $(annotatedObject.dom).remove();
+        annotatedObjectsTracker.annotatedObjects.splice(i, 1);
+      }
+
       videoFile.addEventListener('change', extractionFileUploaded, false);
       zipFile.addEventListener('change', extractionFileUploaded, false);
       xmlFile.addEventListener('change', importXml, false);
@@ -423,6 +421,8 @@
         xmlFile.disabled = true;
         downloadFramesButton.disabled = true;
         generateXmlButton.disabled = true;
+        clearAllAnnotatedObjects();
+        slider.reset();
         player.initialize();
 
         let promise;
@@ -458,6 +458,11 @@
                 videoDimensionsElement.innerHTML = 'Video dimensions determined: ' + img.width + 'x' + img.height;
 
                 framesManager.set(frames);
+                slider.init(
+                  0,
+                  framesManager.frames.totalFrames() - 1,
+                  (frameNumber) => player.seek(frameNumber)
+                );
                 player.ready();
 
                 xmlFile.disabled = false;
@@ -621,11 +626,9 @@
         visibleLabel.append('Is visible?');
         let del = $('<input type="button" value="Delete" />');
         del.click(function() {
-          div.remove();
-          $(annotatedObject.dom).remove();
           for (let i = 0; annotatedObjectsTracker.annotatedObjects.length; i++) {
             if (annotatedObject === annotatedObjectsTracker.annotatedObjects[i]) {
-              annotatedObjectsTracker.annotatedObjects.splice(i, 1);
+              clearAnnotatedObject(i);
               break;
             }
           }
@@ -644,6 +647,8 @@
         div.append(visibleLabel);
         div.append($('<br />'));
         div.append(del);
+
+        annotatedObject.controls = div;
 
         $('#objects').append(div);
       }
