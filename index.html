@@ -739,15 +739,16 @@
           return;
         }
 
+        this.disabled = true;
+
         var reader = new FileReader();
-        reader.onload = function(e) {
+        reader.onload = (e) => {
           if (e.target.readyState != 2) {
             return;
           }
 
           if (e.target.error) {
             throw 'file reader error';
-            return;
           }
 
           let xml = $($.parseXML(e.target.result));
@@ -806,6 +807,8 @@
           }
 
           player.drawFrame(player.currentFrame);
+
+          this.disabled = false;
         };
         reader.readAsText(this.files[0]);
       }
