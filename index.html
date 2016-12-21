@@ -340,6 +340,17 @@
                 }
               }
 
+              let shouldHideOthers = frameWithObjects.objects.some(o => o.annotatedObject.hideOthers);
+              if (shouldHideOthers) {
+                for (let i = 0; i < frameWithObjects.objects.length; i++) {
+                  let object = frameWithObjects.objects[i];
+                  let annotatedObject = object.annotatedObject;
+                  if (!annotatedObject.hideOthers) {
+                    annotatedObject.dom.style.display = 'none';
+                  }
+                }
+              }
+
               slider.setPosition(this.currentFrame);
 
               resolve();
@@ -629,6 +640,15 @@
         });
         visibleLabel.append(visible);
         visibleLabel.append('Is visible?');
+
+        let hideLabel = $('<label>');
+        let hide = $('<input type="checkbox" />');
+        hide.change(function() {
+          annotatedObject.hideOthers = this.checked;
+        });
+        hideLabel.append(hide);
+        hideLabel.append('Hide others?');
+
         let del = $('<input type="button" value="Delete" />');
         del.click(function() {
           for (let i = 0; annotatedObjectsTracker.annotatedObjects.length; i++) {
@@ -650,6 +670,8 @@
         div.append(id);
         div.append($('<br />'));
         div.append(visibleLabel);
+        div.append($('<br />'));
+        div.append(hideLabel);
         div.append($('<br />'));
         div.append(del);
 
