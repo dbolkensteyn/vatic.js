@@ -132,19 +132,23 @@ function extractFramesFromZip(config, file) {
       .loadAsync(file)
       .then((zip) => {
         let totalFrames = 0;
-        for (let i = 0; ; i++) {
-          let file = zip.file(i + config.imageExtension);
-          if (file == null) {
-            totalFrames = i;
-            break;
+        for (const file in zip.files) {
+          if (zip.files.hasOwnProperty(file)) {
+            totalFrames++;
           }
         }
-
+       
         resolve({
           totalFrames: () => { return totalFrames; },
           getFrame: (frameNumber) => {
             return new Promise((resolve, _) => {
-              let file = zip.file(frameNumber + config.imageExtension);
+              if (frameNumber < 0 || frameNumber > totalFrames) {
+                throw new Error(`Invalid frameNumber in getFrame(). frameNumber is ${frameNumber} but there are ${totalFrames}.`);
+              }
+              
+              const key = Object.keys(zip.files)[frameNumber];
+              const file = zip.files[key];
+
               file
                 .async('arraybuffer')
                 .then((content) => {
